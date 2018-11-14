@@ -146,3 +146,22 @@ def load_hooks(hooks, kb):
         result.append(hook_class(**hook_param['arguments']))
     return result
 
+def get_entity_relation_id_neg_sensitive(mapping): 
+    
+    if mapping is None:
+        return None,None
+
+    type_entity_sets={}; entity_map={} 
+    for entity, entity_type in mapping.items(): 
+        if entity_type not in type_entity_sets: 
+            type_entity_sets[entity_type]=set() 
+        type_entity_sets[entity_type].add(entity) 
+         
+    type_entity_range = {} 
+    count=0 
+    for typeid, typeset in type_entity_sets.items(): 
+        type_entity_range[typeid] = (count, count+len(typeset)-1) 
+        for ent in typeset: 
+            entity_map[ent] = count 
+            count+= 1
+    return entity_map, type_entity_range

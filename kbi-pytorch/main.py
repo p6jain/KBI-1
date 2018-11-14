@@ -21,16 +21,21 @@ if not has_cuda:
 def main(dataset_root, save_dir, model_name, model_arguments, loss_function, learning_rate, batch_size,
          regularization_coefficient, gradient_clip, optimizer_name, max_epochs, negative_sample_count, hooks,
          eval_every_x_mini_batches, eval_batch_size, resume_from_save, introduce_oov, verbose):
-    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'))
-    if introduce_oov:
-        ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
-    ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), ktrain.entity_map, ktrain.relation_map,
-                  add_unknowns=not introduce_oov)
-    kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), ktrain.entity_map, ktrain.relation_map,
-                   add_unknowns=not introduce_oov)
-    if(verbose > 0):
+
+    tpm = None
+    if verbose>0:
         utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")
         tpm = extra_utils.fb15k_type_map_fine()
+    entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm)
+
+    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range)
+    if introduce_oov:
+        ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
+    ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map,
+                  add_unknowns=not introduce_oov)
+    kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em = ktrain.entity_map, rm = ktrain.relation_map,
+                   add_unknowns=not introduce_oov)
+    if(verbose > 0):
         ktrain.augment_type_information(tpm)
         ktest.augment_type_information(tpm)
         kvalid.augment_type_information(tpm)

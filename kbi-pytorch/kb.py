@@ -1,13 +1,12 @@
 import numpy
 import torch
 
-
 class kb(object):
     """
     Stores a knowledge base as an numpy array. Can be generated from a file. Also stores the entity/relation mappings
     (which is the mapping from entity names to entity id) and possibly entity type information.
     """
-    def __init__(self, filename, em=None, rm=None, add_unknowns=True):
+    def __init__(self, filename, em=None, rm=None, type_entity_range=None, add_unknowns=True):
         """
         Duh...
         :param filename: The file name to read the kb from
@@ -17,20 +16,25 @@ class kb(object):
         """
         self.entity_map = {} if em is None else em
         self.relation_map = {} if rm is None else rm
+        self.type_entity_range = {} if type_entity_range is None else type_entity_range
         if filename is None:
             return
         facts = []
         with open(filename) as f:
             lines = f.readlines()
             lines = [l.split() for l in lines]
+
+
             for l in lines:
                 if(add_unknowns):
+                    if(l[1] not in self.relation_map):
+                        self.relation_map[l[1]] = len(self.relation_map)                   
                     if(l[0] not in self.entity_map):
                         self.entity_map[l[0]] = len(self.entity_map)
                     if(l[2] not in self.entity_map):
-                        self.entity_map[l[2]] = len(self.entity_map)
-                    if(l[1] not in self.relation_map):
-                        self.relation_map[l[1]] = len(self.relation_map)
+                        self.entity_map[l[2]] = len(self.entity_map)                
+                            
+
                 facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
                         len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
         self.facts = numpy.array(facts, dtype='int64')
@@ -45,6 +49,7 @@ class kb(object):
         entity_type_matrix = numpy.zeros((len(self.entity_map), 1))
         for x in self.type_map:
             entity_type_matrix[self.entity_map[x], 0] = self.type_map[x]
+        self.entity_type_matrix_np = numpy.array(entity_type_matrix, dtype = numpy.long)
         entity_type_matrix = torch.from_numpy(numpy.array(entity_type_matrix))
         self.entity_type_matrix = entity_type_matrix
 
