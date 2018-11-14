@@ -77,7 +77,7 @@ class distmult(torch.nn.Module):
         """
         if (not self.unit_reg and not self.display_norms):
             return ""
-        e_norms = self.E.weight.data.norm(2, dim=-1)
+        e_norms = self.E.weight.data.norm(2, dim=-1, keepdim=True)
         r_norms = self.R.weight.data.norm(2, dim=-1)
         max_e, min_e = torch.max(e_norms), torch.min(e_norms)
         max_r, min_r = torch.max(r_norms), torch.min(r_norms)

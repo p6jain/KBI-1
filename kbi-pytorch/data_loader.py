@@ -39,9 +39,9 @@ class data_loader(object):
 
     def fun(self, type_exclude, negative_count):
         start, end = self.kb.type_entity_range[type_exclude]; # 
-        start = end = int(len(self.kb.entity_map)/2.0)
+        #start = end = int(len(self.kb.entity_map)/2.0)
         diff1 = start 
-        diff2 = len(self.kb.entity_map) - end + 1 #
+        diff2 = len(self.kb.entity_map) - end - 1 #
         ratio = 1.0*(diff1)/(diff2+diff1)
         if int(ratio * negative_count) >= 1 and (negative_count - int(ratio * negative_count)) > 1:
             a1 = numpy.random.choice(start, int(ratio * negative_count))
@@ -92,7 +92,8 @@ class data_loader(object):
         :param negative_count: The number of negative samples for each positive fact.
         :return: A list containing s, r, o and negative s and negative o of the batch
         """
-        ls = self.sample_neg_sensitive(batch_size, negative_count)#self.sample(batch_size, negative_count)
+        #ls = self.sample_neg_sensitive(batch_size, negative_count)
+        ls = self.sample(batch_size, negative_count)
         if self.load_to_gpu:
             return [torch.autograd.Variable(torch.from_numpy(x).cuda()) for x in ls]
         else:
