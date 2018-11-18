@@ -4,7 +4,7 @@ import sklearn.manifold
 import numpy
 from mpl_toolkits.mplot3d import Axes3D
 import kb
-import matplotlib.pyplot
+#import matplotlib.pyplot
 
 def plot_weights(w, sne=False):
     w = w.cpu().numpy()
@@ -99,7 +99,7 @@ def plt(tw, w, td, entity_type_map):
 
 
 def fb15k_type_map_fine():
-    fl = open("data/yago/entity_mid_name_type_typeid.txt").readlines()
+    fl = open("data/fb15k/entity_mid_name_type_typeid.txt").readlines()
     fl = [x.strip().split('\t') for x in fl]
     result = {}
     for line in fl:
@@ -150,7 +150,6 @@ def get_entity_relation_id_neg_sensitive(mapping):
     
     if mapping is None:
         return None,None
-
     type_entity_sets={}; entity_map={} 
     for entity, entity_type in mapping.items(): 
         if entity_type not in type_entity_sets: 
@@ -161,7 +160,8 @@ def get_entity_relation_id_neg_sensitive(mapping):
     count=0 
     for typeid, typeset in type_entity_sets.items(): 
         type_entity_range[typeid] = (count, count+len(typeset)-1) 
-        for ent in typeset: 
+        for ent in typeset:
             entity_map[ent] = count 
             count+= 1
-    return type_entity_sets, entity_map
+
+    return entity_map, type_entity_sets

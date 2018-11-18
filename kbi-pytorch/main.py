@@ -26,9 +26,11 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     if verbose>0:
         utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")
         tpm = extra_utils.fb15k_type_map_fine()
+
     entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm)
 
     ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range)
+
     if introduce_oov:
         ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
     ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map,

@@ -69,6 +69,10 @@ class Trainer(object):
         state['test_score_e1'] = test_score['e1']
         state['valid_score_m'] = valid_score['m']
         state['test_score_m'] = test_score['m']
+
+        state['entity_map'] = self.train.kb.entity_map
+        state['type_entity_range'] = self.train.kb.type_entity_range
+
         filename = os.path.join(self.save_directory, "epoch_%.1f_val_%5.2f_%5.2f_%5.2f_test_%5.2f_%5.2f_%5.2f.pt"%(state['epoch'],
                                                                                            state['valid_score_e2']['mrr'], 
                                                                                            state['valid_score_e1']['mrr'], 
