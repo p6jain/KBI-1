@@ -33,10 +33,13 @@ class Trainer(object):
         self.hooks = hooks if hooks else []
 
     def step(self):
-        s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+        s, r, o, ns, no, ns2, no2 = self.train.tensor_sample(self.batch_size, self.negative_count)
         fp = self.scoring_function(s, r, o)
+
+        #only type incorrect samples
         fns = self.scoring_function(ns, r, o)
         fno = self.scoring_function(s, r, no)
+
         if self.regularization_coefficient is not None:
             reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
@@ -46,13 +49,40 @@ class Trainer(object):
         x = loss.item()
         rg = reg.item()
         self.optim.zero_grad()
-        loss.backward()
+        loss.backward(retain_graph=True)
         if(self.gradient_clip is not None):
             torch.nn.utils.clip_grad_norm(self.scoring_function.parameters(), self.gradient_clip)
         self.optim.step()
         debug = ""
         if "post_epoch" in dir(self.scoring_function):
             debug = self.scoring_function.post_epoch()
+
+
+        #only type correct samples ---- neg_count/10 
+        fns2 = self.scoring_function(ns2, r, o)
+        fno2 = self.scoring_function(s, r, no2)
+
+        if self.regularization_coefficient is not None:
+            reg = self.regularizer(s, r, o) + self.regularizer(ns2, r, o) + self.regularizer(s, r, no2)
+            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*(self.negative_count/10)))
+        else:
+            reg = 0
+        loss = self.loss(fp, fns2, fno2) + self.regularization_coefficient*reg
+        x += loss.item()
+        rg += reg.item()
+        self.optim.zero_grad()
+        loss.backward()
+        if(self.gradient_clip is not None):
+            torch.nn.utils.clip_grad_norm(self.scoring_function.parameters(), self.gradient_clip)
+        self.scoring_function.E_t.weight.grad.zero_()
+        self.scoring_function.R_ht.weight.grad.zero_()
+        self.scoring_function.R_tt.weight.grad.zero_()
+        self.optim.step()
+        # debug = ""
+        if "post_epoch" in dir(self.scoring_function):
+            debug += self.scoring_function.post_epoch()
+
+
         return x, rg, debug
 
     def save_state(self, mini_batches, valid_score, test_score):
