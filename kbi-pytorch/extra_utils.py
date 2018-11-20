@@ -164,4 +164,4 @@ def get_entity_relation_id_neg_sensitive(mapping):
             entity_map[ent] = count 
             count+= 1
 
-    return entity_map, type_entity_sets
+    return entity_map, type_entity_range
