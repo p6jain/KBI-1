@@ -37,8 +37,8 @@ class data_loader(object):
             no[:, 0] = len(self.kb.entity_map)-1
         return [s, r, o, ns, no]
 
-    def fun(self, type_exclude, negative_count):
-        start, end = self.kb.type_entity_range[type_exclude]; # 
+    def sample_outside_type_range(self, type_exclude, negative_count):
+        start, end = self.kb.type_entity_range[type_exclude] # 
         #start = end = int(len(self.kb.entity_map)/2.0)
         diff1 = start 
         diff2 = len(self.kb.entity_map) - end - 1 #
@@ -60,6 +60,12 @@ class data_loader(object):
         assert a.shape[0] == negative_count
         return a
 
+    def sample_inside_type_range(self, type_include, negative_count):
+        start, end = self.kb.type_entity_range[type_include]
+        a = numpy.random.choice((end-start)+1, negative_count) + start
+        return a
+
+
     def sample_neg_sensitive(self, batch_size=1000, negative_count=10):
         indexes = numpy.random.randint(0, self.kb.facts.shape[0], batch_size)
         facts = self.kb.facts[indexes]
@@ -67,23 +73,22 @@ class data_loader(object):
         r = numpy.expand_dims(facts[:, 1], -1)
         o = numpy.expand_dims(facts[:, 2], -1)
         ns = []; no = []
+        ns2 = []; no2 = []
         type_s = self.kb.entity_type_matrix_np[s]
         type_o = self.kb.entity_type_matrix_np[o]
 
-        # print(type_s.shape)
-        # print(type_s)
-
         for i in range(s.shape[0]):
-            ns.append(self.fun(type_s[i][0][0], negative_count))
-            no.append(self.fun(type_o[i][0][0], negative_count))
+            ns.append(self.sample_outside_type_range(type_s[i][0][0], negative_count))
+            no.append(self.sample_outside_type_range(type_o[i][0][0], negative_count))
+            ns2.append(self.sample_inside_type_range(type_s[i][0][0], int(negative_count/10)))
+            no2.append(self.sample_inside_type_range(type_o[i][0][0], int(negative_count/10)))
+
         ns = numpy.array(ns, dtype = numpy.long)
         no = numpy.array(no, dtype = numpy.long)
+        ns2 = numpy.array(ns2, dtype = numpy.long)
+        no2 = numpy.array(no2, dtype = numpy.long)
 
-        # print(ns.shape)
-        # print(ns)
-        # print(ns.shape)
-
-        return [s, r, o, ns, no]
+        return [s, r, o, ns, no, ns2, no2]
 
     def tensor_sample(self, batch_size=1000, negative_count=10):
         """
@@ -92,8 +97,8 @@ class data_loader(object):
         :param negative_count: The number of negative samples for each positive fact.
         :return: A list containing s, r, o and negative s and negative o of the batch
         """
-        #ls = self.sample_neg_sensitive(batch_size, negative_count)
-        ls = self.sample(batch_size, negative_count)
+        ls = self.sample_neg_sensitive(batch_size, negative_count)
+        # ls = self.sample(batch_size, negative_count)
         if self.load_to_gpu:
             return [torch.autograd.Variable(torch.from_numpy(x).cuda()) for x in ls]
         else:
