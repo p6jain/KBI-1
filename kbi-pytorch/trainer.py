@@ -33,7 +33,7 @@ class Trainer(object):
         self.hooks = hooks if hooks else []
 
     def step(self):
-        s, r, o, ns, no, ns2, no2 = self.train.tensor_sample(self.batch_size, self.negative_count)
+        s, r, o, ns, no, ns2, no2, accept_datapoint = self.train.tensor_sample(self.batch_size, self.negative_count)
         fp = self.scoring_function(s, r, o)
 
         #only type incorrect samples
@@ -59,6 +59,13 @@ class Trainer(object):
 
 
         #only type correct samples ---- neg_count/10 
+        s = s[accept_datapoint]
+        r = r[accept_datapoint]
+        o = o[accept_datapoint]
+        ns2 = ns2[accept_datapoint]
+        no2 = no2[accept_datapoint]
+
+        fp = self.scoring_function(s, r, o)
         fns2 = self.scoring_function(ns2, r, o)
         fno2 = self.scoring_function(s, r, no2)
 

@@ -77,9 +77,17 @@ class data_loader(object):
         type_s = self.kb.entity_type_matrix_np[s]
         type_o = self.kb.entity_type_matrix_np[o]
 
+        accept_datapoint = []
+
         for i in range(s.shape[0]):
             ns.append(self.sample_outside_type_range(type_s[i][0][0], negative_count))
             no.append(self.sample_outside_type_range(type_o[i][0][0], negative_count))
+            
+            start_s, end_s = self.kb.type_entity_range[type_s[i][0][0]]
+            start_o, end_o = self.kb.type_entity_range[type_o[i][0][0]]
+            if ((end_s-start_s)+1 > 50) and ((end_o-start_o)+1 > 50):
+                accept_datapoint.append(i)
+
             ns2.append(self.sample_inside_type_range(type_s[i][0][0], int(negative_count/10)))
             no2.append(self.sample_inside_type_range(type_o[i][0][0], int(negative_count/10)))
 
@@ -87,8 +95,9 @@ class data_loader(object):
         no = numpy.array(no, dtype = numpy.long)
         ns2 = numpy.array(ns2, dtype = numpy.long)
         no2 = numpy.array(no2, dtype = numpy.long)
+        accept_datapoint = numpy.array(accept_datapoint, dtype = numpy.long)
 
-        return [s, r, o, ns, no, ns2, no2]
+        return [s, r, o, ns, no, ns2, no2, accept_datapoint]
 
     def tensor_sample(self, batch_size=1000, negative_count=10):
         """
