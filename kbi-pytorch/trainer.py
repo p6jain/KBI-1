@@ -32,11 +32,9 @@ class Trainer(object):
         self.verbose = verbose
         self.hooks = hooks if hooks else []
 
-    def step(self):
+    def step_old(self):
         s, r, o, ns, no, ns2, no2, accept_datapoint = self.train.tensor_sample(self.batch_size, self.negative_count)
         fp = self.scoring_function(s, r, o)
-
-        #only type incorrect samples
         fns = self.scoring_function(ns, r, o)
         fno = self.scoring_function(s, r, no)
 
@@ -57,40 +55,76 @@ class Trainer(object):
         if "post_epoch" in dir(self.scoring_function):
             debug = self.scoring_function.post_epoch()
 
-
-        #only type correct samples ---- neg_count/10 
-        s = s[accept_datapoint]
-        r = r[accept_datapoint]
-        o = o[accept_datapoint]
-        ns2 = ns2[accept_datapoint]
-        no2 = no2[accept_datapoint]
-
-        fp = self.scoring_function(s, r, o)
-        fns2 = self.scoring_function(ns2, r, o)
-        fno2 = self.scoring_function(s, r, no2)
+    def step_type_incorrect(self, s, r, o, neg, flag=2):
+        fp = self.scoring_function(s, r, o, flag)
+        if flag == 2:   # s is corrupted
+            fneg = self.scoring_function(neg, r, o, flag)
+        elif flag == 3:
+            fneg = self.scoring_function(s, r, neg, flag)
 
         if self.regularization_coefficient is not None:
-            reg = self.regularizer(s, r, o) + self.regularizer(ns2, r, o) + self.regularizer(s, r, no2)
-            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*(self.negative_count/10)))
+            reg = self.regularizer(s, r, o)
+            if flag == 2:
+                reg += self.regularizer(neg, r, o)
+            elif flag == 3:
+                reg += self.regularizer(s, r, neg)
+            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
         else:
             reg = 0
-        loss = self.loss(fp, fns2, fno2) + self.regularization_coefficient*reg
-        x += loss.item()
-        rg += reg.item()
+        loss = self.loss(fp, fneg) + self.regularization_coefficient*reg
+        x = loss.item()
+        rg = reg.item()
         self.optim.zero_grad()
         loss.backward()
         if(self.gradient_clip is not None):
             torch.nn.utils.clip_grad_norm(self.scoring_function.parameters(), self.gradient_clip)
-        self.scoring_function.E_t.weight.grad.zero_()
-        self.scoring_function.R_ht.weight.grad.zero_()
-        self.scoring_function.R_tt.weight.grad.zero_()
         self.optim.step()
-        # debug = ""
+        debug = ""
         if "post_epoch" in dir(self.scoring_function):
-            debug += self.scoring_function.post_epoch()
-
+            debug = self.scoring_function.post_epoch()
 
         return x, rg, debug
+
+    def step_type_correct(self, s, r, o, neg, flag=2):
+        fp = self.scoring_function(s, r, o, 1)
+        if flag == 2:   # s is corrupted
+            fneg = self.scoring_function(neg, r, o, 1)
+        elif flag == 3:
+            fneg = self.scoring_function(s, r, neg, 1)
+
+        if self.regularization_coefficient is not None:
+            reg = self.regularizer(s, r, o)
+            if flag == 2:
+                reg += self.regularizer(neg, r, o)
+            elif flag == 3:
+                reg += self.regularizer(s, r, neg)
+            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*(self.negative_count/10)))
+        else:
+            reg = 0
+        loss = self.loss(fp, fneg) + self.regularization_coefficient*reg
+        x = loss.item()
+        rg = reg.item()
+        self.optim.zero_grad()
+        loss.backward()
+        if(self.gradient_clip is not None):
+            torch.nn.utils.clip_grad_norm(self.scoring_function.parameters(), self.gradient_clip)
+        self.optim.step()
+        debug = ""
+        if "post_epoch" in dir(self.scoring_function):
+            debug = self.scoring_function.post_epoch()
+
+        return x, rg, debug
+
+
+    def step(self):
+        s, r, o, ns, no, ns2, no2, accept_datapoint = self.train.tensor_sample(self.batch_size, self.negative_count)
+
+        x1, r1, debug1 = self.step_type_incorrect(s, r, o, ns, flag=2)
+        x2, r2, debug2 = self.step_type_incorrect(s, r, o, no, flag=3)
+        x3, r3, debug3 = self.step_type_correct(s, r, o, ns2, flag=2)
+        x4, r4, debug4 = self.step_type_correct(s, r, o, no2, flag=3)
+
+        return x1+x2+x3+x4, r1+r2+r3+r4, debug1+debug2+debug3+debug4
 
     def save_state(self, mini_batches, valid_score, test_score):
         state = dict()

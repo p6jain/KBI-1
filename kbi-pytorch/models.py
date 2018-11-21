@@ -184,7 +184,7 @@ class typed_model(torch.nn.Module):
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
         self.minimum_value = 0.0
 
-    def forward(self, s, r, o):
+    def forward_old(self, s, r, o):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
@@ -195,6 +195,26 @@ class typed_model(torch.nn.Module):
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+        return self.mult*base_forward*head_type_compatibility*tail_type_compatibility
+
+    def forward(self, s, r, o, flag=0):
+        base_forward = self.base_model(s, r, o)
+        base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
+        if flag == 1 :
+            return self.mult*base_forward
+        s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
+        head_type_compatibility = (s_t*r_ht).sum(-1)
+        tail_type_compatibility = (o_t*r_tt).sum(-1)
+        head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
+        tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+        if flag == 2:
+            return self.mult*base_forward*head_type_compatibility
+        if flag == 3:
+            return self.mult*base_forward*tail_type_compatibility
+            
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility
 
     def regularizer(self, s, r, o):

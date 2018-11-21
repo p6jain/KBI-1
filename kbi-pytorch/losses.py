@@ -4,12 +4,17 @@ import torch
 class softmax_loss(torch.nn.Module):
     def __init__(self):
         super(softmax_loss, self).__init__()
-    def forward(self, positive, negative_1, negative_2):
-        max_den_e1 = negative_1.max(dim=1, keepdim=True)[0].detach()
-        max_den_e2 = negative_2.max(dim=1, keepdim=True)[0].detach()
-        den_e1 = (negative_1-max_den_e1).exp().sum(dim=-1, keepdim=True)
-        den_e2 = (negative_2-max_den_e2).exp().sum(dim=-1, keepdim=True)
-        losses = ((2*positive-max_den_e1-max_den_e2) - den_e1.log() - den_e2.log())
+    # def forward(self, positive, negative_1, negative_2):
+    #     max_den_e1 = negative_1.max(dim=1, keepdim=True)[0].detach()
+    #     max_den_e2 = negative_2.max(dim=1, keepdim=True)[0].detach()
+    #     den_e1 = (negative_1-max_den_e1).exp().sum(dim=-1, keepdim=True)
+    #     den_e2 = (negative_2-max_den_e2).exp().sum(dim=-1, keepdim=True)
+    #     losses = ((2*positive-max_den_e1-max_den_e2) - den_e1.log() - den_e2.log())
+    #     return -losses.mean()
+    def forward(self, positive, negative):
+        max_den = negative.max(dim=1, keepdim=True)[0].detach()
+        den = (negative-max_den).exp().sum(dim=-1, keepdim=True)
+        losses = ((positive-max_den) - den.log())
         return -losses.mean()
 
 
