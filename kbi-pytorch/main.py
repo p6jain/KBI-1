@@ -27,7 +27,11 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")
         tpm = extra_utils.fb15k_type_map_fine()
 
-    entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm)
+    if resume_from_save:
+        saved_model = torch.load(resume_from_save)
+        entity_map, type_entity_range = saved_model['entity_map'], saved_model['type_entity_range']
+    else:
+        entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm)
 
     ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range)
 
