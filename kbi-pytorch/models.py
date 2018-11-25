@@ -198,13 +198,19 @@ class typed_model(torch.nn.Module):
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility
 
     def regularizer(self, s, r, o):
-        return self.base_model.regularizer(s, r, o)
+        s_t = self.E_t(s)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o)
+        reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
+        return self.base_model.regularizer(s, r, o) + reg
+        # return self.base_model.regularizer(s, r, o)
 
     def post_epoch(self):
-        if(self.unit_reg):
-            self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
-            self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
-            self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
+        # if(self.unit_reg):
+        #     self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
+        #     self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
+        #     self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
         return self.base_model.post_epoch()
 
 
