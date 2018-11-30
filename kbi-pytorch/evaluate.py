@@ -3,6 +3,7 @@ import numpy
 import torch
 import time
 import gc
+import csv
 
 
 class ranker(object):
@@ -69,17 +70,88 @@ class ranker(object):
         :return: rank of o, score of each entity and score of the gold o
         """
         if flag_s_o:
+            """
             scores = self.scoring_function(s, r, None).data
             score_of_expected = scores.gather(1, o.data)
+            scores.scatter_(1, s.data, self.scoring_function.minimum_value) #disallow (e,r,e)
+            """
+
+            ####2-step ranking
+            scores, base, head, tail  = self.scoring_function(s, r, None)
+
+            scores = scores.data
+            base = base.data
+            head = head.data
+            tail = tail.data
+            
+            score_of_expected = scores.gather(1, o.data)
+            scores.scatter_(1, s.data, self.scoring_function.minimum_value)
+
+            tail.scatter_(1, s.data, self.scoring_function.minimum_value)
+            base.scatter_(1, s.data, self.scoring_function.minimum_value)
+            
+            base_exp = base.gather(1, o.data)
+            # head_exp = head.gather(1, o.data)
+            tail_exp = tail.gather(1, o.data)
+
+            tail.scatter_(1, knowns, self.scoring_function.minimum_value)
+
+            type_exp = tail_exp
+            type_tot = tail
+
+
         else:
+            """
             scores = self.scoring_function(None, r, o).data
             score_of_expected = scores.gather(1, s.data)
+            scores.scatter_(1, o.data, self.scoring_function.minimum_value) #disallow (e,r,e)
+            """
 
+            #### 2-step ranking
+            scores, base, head, tail  = self.scoring_function(None, r, o)
+
+            scores = scores.data
+            base = base.data
+            head = head.data
+            tail = tail.data
+            
+            score_of_expected = scores.gather(1, o.data)
+            scores.scatter_(1, s.data, self.scoring_function.minimum_value)
+
+            head.scatter_(1, o.data, self.scoring_function.minimum_value)
+            base.scatter_(1, o.data, self.scoring_function.minimum_value)
+            
+            base_exp = base.gather(1, s.data)
+            head_exp = head.gather(1, s.data)
+            # tail_exp = tail.gather(1, s.data)
+
+            head.scatter_(1, knowns, self.scoring_function.minimum_value)
+
+            type_exp = head_exp
+            type_tot = head
+
+
+        scores.scatter_(1, knowns, self.scoring_function.minimum_value)
+        base.scatter_(1, knowns, self.scoring_function.minimum_value)
+        type_exp = torch.round(type_exp*5.0)
+        type_class = torch.round(type_tot*5.0)
+        greater = type_class.gt(type_exp).float()
+        rank = greater.sum(dim=1)
+
+        out_of_class = type_class.eq(type_exp).float()
+        base = base*out_of_class
+        greater_base = base.gt(base_exp).float()
+        eq_base = base.eq(base_exp).float()
+        rank = rank + greater_base.sum(dim=1) + 1 + eq_base.sum(dim=1)/2.0
+        return rank, scores, score_of_expected, base, base_exp
+
+        """
         scores.scatter_(1, knowns, self.scoring_function.minimum_value)
         greater = scores.ge(score_of_expected).float()
         equal = scores.eq(score_of_expected).float()
         rank = greater.sum(dim=1)+1+equal.sum(dim=1)/2.0
         return rank, scores, score_of_expected
+        """
 
 
 def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
@@ -105,6 +177,16 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
         entity_type_matrix = kb.entity_type_matrix.cuda()
         for hook in hooks:
             hook.begin()
+
+    subject_type_total = {}
+    subject_type_correct = {}
+    object_type_total = {}
+    object_type_correct = {}
+    relation_subject_type_total = {}
+    relation_subject_type_correct = {}
+    relation_object_type_total = {}
+    relation_object_type_correct = {}
+    
     for i in range(0, int(facts.shape[0]), batch_size):
         start = i
         end = min(i+batch_size, facts.shape[0])
@@ -119,8 +201,11 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
         knowns_s = torch.from_numpy(knowns_s).cuda()
         knowns_o = torch.from_numpy(knowns_o).cuda()
         
-        ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
-        ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
+        # ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
+        # ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
+
+        ranks_o, scores_o, score_of_expected_o, base_o, base_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
+        ranks_s, scores_s, score_of_expected_s, base_s, base_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
 
         #e1,r,?
         totals['e2']['mr'] += ranks_o.sum()
@@ -141,8 +226,12 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
 
         extra = ""
         if verbose > 0:
-            scores_s.scatter_(1, s.data, score_of_expected_s)
-            top_scores_s, top_predictions_s = scores_s.topk(top_count, dim=-1)
+            # scores_s.scatter_(1, s.data, score_of_expected_s)
+            # top_scores_s, top_predictions_s = scores_s.topk(top_count, dim=-1)
+
+            base_s.scatter_(1, s.data, base_expected_s)
+            top_scores_s, top_predictions_s = base_s.topk(top_count, dim=-1)
+
             top_predictions_type_s = torch.nn.functional.embedding(top_predictions_s, entity_type_matrix).squeeze(-1)
             expected_type_s = torch.nn.functional.embedding(s, entity_type_matrix).squeeze()
             correct_s = expected_type_s.eq(top_predictions_type_s[:, 0]).float()
@@ -152,8 +241,12 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
             for hook in hooks:
                 hook(s.data, r.data, o.data, ranks_s, top_scores_s, top_predictions_s, expected_type_s, top_predictions_type_s)
         
-            scores_o.scatter_(1, o.data, score_of_expected_o)
-            top_scores_o, top_predictions_o = scores_o.topk(top_count, dim=-1)
+            # scores_o.scatter_(1, o.data, score_of_expected_o)
+            # top_scores_o, top_predictions_o = scores_o.topk(top_count, dim=-1)
+
+            base_o.scatter_(1, o.data, base_expected_o)
+            top_scores_o, top_predictions_o = base_o.topk(top_count, dim=-1)
+
             top_predictions_type_o = torch.nn.functional.embedding(top_predictions_o, entity_type_matrix).squeeze(-1)
             expected_type_o = torch.nn.functional.embedding(o, entity_type_matrix).squeeze()
             correct_o = expected_type_o.eq(top_predictions_type_o[:, 0]).float()
@@ -171,6 +264,57 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
                                   100.0*totals['m']['hits1']/end, 100.0*totals['e1']['mrr']/end, 100.0*totals['e1']['hits10']/end,
                                   100.0*totals['e1']['hits1']/end, 100.0*totals['e2']['mrr']/end, 100.0*totals['e2']['hits10']/end,
                                   100.0*totals['e2']['hits1']/end, time.time()-start_time)) + extra, color="green")
+
+        """
+        exp_type_s = int(expected_type_s.data.cpu().numpy())
+        exp_type_o = int(expected_type_o.data.cpu().numpy())
+
+        cor_s = correct_s.data.cpu().numpy()[0]
+        cor_o= correct_o.data.cpu().numpy()[0]
+
+        # relation_name = reverse_relation_map[r.data.cpu().numpy()[0][0]]
+        relation_name = r.data.cpu().numpy()[0][0]
+
+        if exp_type_s in subject_type_total:
+                subject_type_total[exp_type_s] += 1
+                subject_type_correct[exp_type_s] += cor_s  
+        else:
+                subject_type_total[exp_type_s] = 1
+                subject_type_correct[exp_type_s] = cor_s 
+
+        if exp_type_o in object_type_total:
+                object_type_total[exp_type_o] += 1
+                object_type_correct[exp_type_o] += cor_o 
+        else:
+                object_type_total[exp_type_o] = 1
+                object_type_correct[exp_type_o] = cor_o
+
+        if relation_name in relation_subject_type_total:
+                relation_subject_type_total[relation_name] += 1
+                relation_subject_type_correct[relation_name] += cor_s  
+        else:
+                relation_subject_type_total[relation_name] = 1
+                relation_subject_type_correct[relation_name] = cor_s 
+
+        if relation_name in relation_object_type_total:
+                relation_object_type_total[relation_name] += 1
+                relation_object_type_correct[relation_name] += cor_o 
+        else:
+                relation_object_type_total[relation_name] = 1
+                relation_object_type_correct[relation_name] = cor_o
+
+
+    with open("entity_type_correct.csv", "w") as f:
+        writer = csv.writer(f)
+        #writer.writerows(abs)
+        writer.writerows([subject_type_total.keys(), subject_type_total.values(), subject_type_correct.keys(), subject_type_correct.values(), object_type_total.keys(), object_type_total.values(), object_type_correct.keys(), object_type_correct.values()])
+
+    with open("relation_type_correct.csv", "w") as f:
+        writer = csv.writer(f)
+        #writer.writerows(abs)
+        writer.writerows([relation_subject_type_total.keys(), relation_subject_type_total.values(), relation_subject_type_correct.keys(), relation_subject_type_correct.values(), relation_object_type_total.keys(), relation_object_type_total.values(), relation_object_type_correct.keys(), relation_object_type_correct.values()])
+    """
+
     
     gc.collect()
     torch.cuda.empty_cache()
