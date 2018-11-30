@@ -42,9 +42,11 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em = ktrain.entity_map, rm = ktrain.relation_map,
                    add_unknowns=not introduce_oov)
     if(verbose > 0):
-        ktrain.augment_type_information(tpm)
-        ktest.augment_type_information(tpm)
-        kvalid.augment_type_information(tpm)
+        enm = extra_utils.fb15k_entity_name_map_fine()
+        tnm = extra_utils.fb15k_type_name_map_fine()
+        ktrain.augment_type_information(tpm,enm,tnm)
+        ktest.augment_type_information(tpm,enm,tnm)
+        kvalid.augment_type_information(tpm,enm,tnm)
         hooks = extra_utils.load_hooks(hooks, ktrain)
 
     dltrain = data_loader.data_loader(ktrain, has_cuda)

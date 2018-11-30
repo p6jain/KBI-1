@@ -106,6 +106,22 @@ def fb15k_type_map_fine():
         result[line[0]] = int(line[3])
     return result
 
+def fb15k_entity_name_map_fine():
+    fl = open("data/fb15k/entity_mid_name_type_typeid.txt").readlines()
+    fl = [x.strip().split('\t') for x in fl]
+    result = {}
+    for line in fl:
+        result[line[0]] = line[1]
+    return result
+
+def fb15k_type_name_map_fine():
+    fl = open("data/fb15k/entity_mid_name_type_typeid.txt").readlines()
+    fl = [x.strip().split('\t') for x in fl]
+    result = {}
+    for line in fl:
+        result[int(line[3])] = line[2]
+    return result
+
 
 class type_mrr_hook(object):
     def __init__(self, kb, type_id):

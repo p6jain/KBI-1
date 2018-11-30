@@ -39,12 +39,17 @@ class kb(object):
                         len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
         self.facts = numpy.array(facts, dtype='int64')
 
-    def augment_type_information(self, mapping):
+    def augment_type_information(self, mapping, enm=None, tnm=None):
         """
         Augments the current knowledge base with entity type information for more detailed evaluation.\n
         :param mapping: The maping from entity to types. Expected to be a int to int dict
         :return: None
         """
+
+        self.entity_name_map = enm
+        self.type_name_map = tnm
+
+
         self.type_map = mapping
         entity_type_matrix = numpy.zeros((len(self.entity_map), 1))
         for x in self.type_map:
