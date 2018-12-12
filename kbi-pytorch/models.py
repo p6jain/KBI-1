@@ -195,7 +195,7 @@ class typed_model(torch.nn.Module):
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
-        return self.mult*base_forward*head_type_compatibility*tail_type_compatibility, base_forward, head_type_compatibility, tail_type_compatibility
+        return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
 
     def regularizer(self, s, r, o):
         s_t = self.E_t(s)

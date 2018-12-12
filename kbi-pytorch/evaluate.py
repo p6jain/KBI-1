@@ -70,12 +70,12 @@ class ranker(object):
         :return: rank of o, score of each entity and score of the gold o
         """
         if flag_s_o:
-            """
+            #"""
             scores = self.scoring_function(s, r, None).data
             score_of_expected = scores.gather(1, o.data)
             scores.scatter_(1, s.data, self.scoring_function.minimum_value) #disallow (e,r,e)
+            #"""
             """
-
             ####2-step ranking
             scores, base, head, tail  = self.scoring_function(s, r, None)
 
@@ -98,15 +98,15 @@ class ranker(object):
 
             type_exp = tail_exp
             type_tot = tail
-
+            """
 
         else:
-            """
+            #"""
             scores = self.scoring_function(None, r, o).data
             score_of_expected = scores.gather(1, s.data)
             scores.scatter_(1, o.data, self.scoring_function.minimum_value) #disallow (e,r,e)
+            #"""
             """
-
             #### 2-step ranking
             scores, base, head, tail  = self.scoring_function(None, r, o)
 
@@ -129,8 +129,9 @@ class ranker(object):
 
             type_exp = head_exp
             type_tot = head
+            """
 
-
+        """
         scores.scatter_(1, knowns, self.scoring_function.minimum_value)
         base.scatter_(1, knowns, self.scoring_function.minimum_value)
         type_exp = torch.round(type_exp*5.0)
@@ -144,14 +145,15 @@ class ranker(object):
         eq_base = base.eq(base_exp).float()
         rank = rank + greater_base.sum(dim=1) + 1 + eq_base.sum(dim=1)/2.0
         return rank, scores, score_of_expected, base, base_exp
-
         """
+        
+        #"""
         scores.scatter_(1, knowns, self.scoring_function.minimum_value)
         greater = scores.ge(score_of_expected).float()
         equal = scores.eq(score_of_expected).float()
         rank = greater.sum(dim=1)+1+equal.sum(dim=1)/2.0
         return rank, scores, score_of_expected
-        """
+        #"""
 
 
 def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
@@ -201,11 +203,11 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
         knowns_s = torch.from_numpy(knowns_s).cuda()
         knowns_o = torch.from_numpy(knowns_o).cuda()
         
-        # ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
-        # ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
+        ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
+        ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
 
-        ranks_o, scores_o, score_of_expected_o, base_o, base_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
-        ranks_s, scores_s, score_of_expected_s, base_s, base_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
+        # ranks_o, scores_o, score_of_expected_o, base_o, base_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
+        # ranks_s, scores_s, score_of_expected_s, base_s, base_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
 
         #e1,r,?
         totals['e2']['mr'] += ranks_o.sum()
@@ -226,11 +228,11 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
 
         extra = ""
         if verbose > 0:
-            # scores_s.scatter_(1, s.data, score_of_expected_s)
-            # top_scores_s, top_predictions_s = scores_s.topk(top_count, dim=-1)
+            scores_s.scatter_(1, s.data, score_of_expected_s)
+            top_scores_s, top_predictions_s = scores_s.topk(top_count, dim=-1)
 
-            base_s.scatter_(1, s.data, base_expected_s)
-            top_scores_s, top_predictions_s = base_s.topk(top_count, dim=-1)
+            # base_s.scatter_(1, s.data, base_expected_s)
+            # top_scores_s, top_predictions_s = base_s.topk(top_count, dim=-1)
 
             top_predictions_type_s = torch.nn.functional.embedding(top_predictions_s, entity_type_matrix).squeeze(-1)
             expected_type_s = torch.nn.functional.embedding(s, entity_type_matrix).squeeze()
@@ -241,11 +243,11 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
             for hook in hooks:
                 hook(s.data, r.data, o.data, ranks_s, top_scores_s, top_predictions_s, expected_type_s, top_predictions_type_s)
         
-            # scores_o.scatter_(1, o.data, score_of_expected_o)
-            # top_scores_o, top_predictions_o = scores_o.topk(top_count, dim=-1)
+            scores_o.scatter_(1, o.data, score_of_expected_o)
+            top_scores_o, top_predictions_o = scores_o.topk(top_count, dim=-1)
 
-            base_o.scatter_(1, o.data, base_expected_o)
-            top_scores_o, top_predictions_o = base_o.topk(top_count, dim=-1)
+            # base_o.scatter_(1, o.data, base_expected_o)
+            # top_scores_o, top_predictions_o = base_o.topk(top_count, dim=-1)
 
             top_predictions_type_o = torch.nn.functional.embedding(top_predictions_o, entity_type_matrix).squeeze(-1)
             expected_type_o = torch.nn.functional.embedding(o, entity_type_matrix).squeeze()
