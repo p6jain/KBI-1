@@ -30,16 +30,23 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     if resume_from_save:
         saved_model = torch.load(resume_from_save)
         entity_map, type_entity_range = saved_model['entity_map'], saved_model['type_entity_range']
+        if 'reverse_entity_map' in saved_model:
+            reverse_entity_map = saved_model['reverse_entity_map']
+        else:
+            reverse_entity_map = {}
+            for k,v in entity_map.items():
+                reverse_entity_map[v] = k
+ 
     else:
-        entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm)
+        entity_map, reverse_entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm)
 
-    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range)
+    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range, rem=reverse_entity_map)
 
     if introduce_oov:
         ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
-    ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map,
+    ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
                   add_unknowns=not introduce_oov)
-    kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em = ktrain.entity_map, rm = ktrain.relation_map,
+    kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
                    add_unknowns=not introduce_oov)
     if(verbose > 0):
         enm = extra_utils.fb15k_entity_name_map_fine()

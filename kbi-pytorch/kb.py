@@ -6,7 +6,7 @@ class kb(object):
     Stores a knowledge base as an numpy array. Can be generated from a file. Also stores the entity/relation mappings
     (which is the mapping from entity names to entity id) and possibly entity type information.
     """
-    def __init__(self, filename, em=None, rm=None, type_entity_range=None, add_unknowns=True):
+    def __init__(self, filename, em=None, rm=None, type_entity_range=None, rem=None, rrm=None, add_unknowns=True):
         """
         Duh...
         :param filename: The file name to read the kb from
@@ -17,6 +17,8 @@ class kb(object):
         self.entity_map = {} if em is None else em
         self.relation_map = {} if rm is None else rm
         self.type_entity_range = {} if type_entity_range is None else type_entity_range
+        self.reverse_entity_map = {} if rem is None else rem
+        self.reverse_relation_map = {} if rrm is None else rrm
         if filename is None:
             return
         facts = []
@@ -28,10 +30,13 @@ class kb(object):
             for l in lines:
                 if(add_unknowns):
                     if(l[1] not in self.relation_map):
+                        self.reverse_relation_map[len(self.relation_map)] = l[1]
                         self.relation_map[l[1]] = len(self.relation_map)                   
                     if(l[0] not in self.entity_map):
+                        self.reverse_entity_map[len(self.entity_map)] = l[0]
                         self.entity_map[l[0]] = len(self.entity_map)
                     if(l[2] not in self.entity_map):
+                        self.reverse_entity_map[len(self.entity_map)] = l[2]
                         self.entity_map[l[2]] = len(self.entity_map)                
                             
 
