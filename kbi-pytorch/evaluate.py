@@ -73,7 +73,7 @@ class ranker(object):
             #"""
             scores = self.scoring_function(s, r, None).data
             score_of_expected = scores.gather(1, o.data)
-            scores.scatter_(1, s.data, self.scoring_function.minimum_value) #disallow (e,r,e)
+            # scores.scatter_(1, s.data, self.scoring_function.minimum_value) #disallow (e,r,e)
             #"""
             """
             ####2-step ranking
@@ -104,7 +104,7 @@ class ranker(object):
             #"""
             scores = self.scoring_function(None, r, o).data
             score_of_expected = scores.gather(1, s.data)
-            scores.scatter_(1, o.data, self.scoring_function.minimum_value) #disallow (e,r,e)
+            # scores.scatter_(1, o.data, self.scoring_function.minimum_value) #disallow (e,r,e)
             #"""
             """
             #### 2-step ranking
@@ -239,7 +239,7 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
             correct_s = expected_type_s.eq(top_predictions_type_s[:, 0]).float()
             correct_count_s = correct_s.sum()
             totals["correct_type"]["e1"] += correct_count_s.item()#data[0]
-            extra += "TP-s error %5.3f |" % (100*(1.0-totals["correct_type"]["e1"]/end)) #?,r,o
+            extra += "TP-s err %5.2f|" % (100*(1.0-totals["correct_type"]["e1"]/end)) #?,r,o
             for hook in hooks:
                 hook(s.data, r.data, o.data, ranks_s, top_scores_s, top_predictions_s, expected_type_s, top_predictions_type_s)
         
@@ -254,7 +254,7 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
             correct_o = expected_type_o.eq(top_predictions_type_o[:, 0]).float()
             correct_count_o = correct_o.sum()
             totals["correct_type"]["e2"] += correct_count_o.item()#data[0]
-            extra += "TP-o error %5.3f |" % (100*(1.0-totals["correct_type"]["e2"]/end)) #s,r,?
+            extra += "TP-o err %5.2f|" % (100*(1.0-totals["correct_type"]["e2"]/end)) #s,r,?
             for hook in hooks:
                 hook(s.data, r.data, o.data, ranks_o, top_scores_o, top_predictions_o, expected_type_o, top_predictions_type_o)
 

@@ -198,19 +198,21 @@ class typed_model(torch.nn.Module):
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
 
     def regularizer(self, s, r, o):
+        """
         s_t = self.E_t(s)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
         o_t = self.E_t(o)
         reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
         return self.base_model.regularizer(s, r, o) + reg
-        # return self.base_model.regularizer(s, r, o)
+        """
+        return self.base_model.regularizer(s, r, o)
 
     def post_epoch(self):
-        # if(self.unit_reg):
-        #     self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
-        #     self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
-        #     self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
+        if(self.unit_reg):
+            self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
         return self.base_model.post_epoch()
 
 
@@ -358,5 +360,172 @@ class E(torch.nn.Module):
             return "(%.2f, %.2f), (%.2f, %.2f), (%.2f, %.2f)" % (max_e, min_e, max_r_head, min_r_head, max_r_tail, min_r_tail)
         else:
             return ""
+
+
+class box_typed_model(torch.nn.Module):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, mult=20.0, box_reg_coef=0.1, box_reg='l2', psi=2.0):
+        super(box_typed_model, self).__init__()
+
+        base_model_class = globals()[base_model_name]
+        base_model_arguments['entity_count'] = entity_count
+        base_model_arguments['relation_count'] = relation_count
+        self.base_model = base_model_class(**base_model_arguments)
+
+        self.embedding_dim = embedding_dim
+        self.entity_count = entity_count
+        self.relation_count = relation_count
+        self.mult = mult
+        self.box_reg = box_reg
+        self.box_reg_coef = box_reg_coef
+        self.psi = psi
+        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
+        self.R_ht_high = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_ht_low = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_tt_high = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_tt_low = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_ht_high.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_tt_low.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_tt_high.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_ht_low.weight.data, 0, 0.05)
+        #ensuring _low _high are init appropriately..low is low and vice versa
+        self.R_ht_high.weight.data, self.R_ht_low.weight.data = torch.max(self.R_ht_high.weight.data, self.R_ht_low.weight.data), torch.min(self.R_ht_high.weight.data, self.R_ht_low.weight.data)
+        self.R_tt_high.weight.data, self.R_tt_low.weight.data = torch.max(self.R_tt_high.weight.data, self.R_tt_low.weight.data), torch.min(self.R_tt_high.weight.data, self.R_tt_low.weight.data)
+
+        self.minimum_value = 0.0
+
+    def compute_distance(self, box_low, box_high, point):
+        temporary = box_low - point
+        term_1 = torch.max(temporary, torch.zeros(1).cuda() if temporary.is_cuda else torch.zeros(1))
+        distance = torch.max(point - box_high, term_1)
+        distance, _ = distance.max(dim=-1)
+        return distance
+
+    def forward(self, s, r, o):
+        base_forward = self.base_model(s, r, o)
+        s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
+
+        r_ht_low = self.R_ht_low(r)
+        r_ht_high = self.R_ht_high(r)
+        r_tt_low = self.R_tt_low(r)
+        r_tt_high = self.R_tt_high(r)
+
+        o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
+
+        head_type_compatibility = - self.compute_distance(r_ht_low, r_ht_high, s_t)#(s_t*r_ht).sum(-1)
+        tail_type_compatibility = - self.compute_distance(r_tt_low, r_tt_high, s_t)#(o_t*r_tt).sum(-1)
+
+        base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
+        head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
+        tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+        return self.mult*base_forward*head_type_compatibility*tail_type_compatibility
+
+    def regularizer(self, s, r, o):
+        box_sizes_tt = self.R_tt_high.weight.data - self.R_tt_low.weight.data
+        box_sizes_ht = self.R_ht_high.weight.data - self.R_ht_low.weight.data
+        if(self.box_reg == 'l1'):
+            reg = (box_sizes_ht.abs() + box_sizes_tt.abs()).sum() #l1
+        elif (self.box_reg == 'l2'):
+            reg = (box_sizes_ht*box_sizes_ht + box_sizes_tt*box_sizes_tt).sum()
+        else:
+            utils.colored_print("red", "unknown regularizer" + str(self.reg))
+        return reg * self.box_reg_coef + self.base_model.regularizer(s, r, o)
+
+    def post_epoch(self):
+        self.R_ht_high.weight.data, self.R_ht_low.weight.data = torch.max(self.R_ht_high.weight.data, self.R_ht_low.weight.data), torch.min(self.R_ht_high.weight.data, self.R_ht_low.weight.data)
+        self.R_tt_high.weight.data, self.R_tt_low.weight.data = torch.max(self.R_tt_high.weight.data, self.R_tt_low.weight.data), torch.min(self.R_tt_high.weight.data, self.R_tt_low.weight.data)
+        return self.base_model.post_epoch()
+
+
+class HyperbolicTypeModel(torch.nn.Module):
+    '''
+    CUDA_VISIBLE_DEVICES=1 python3 main.py -d fb15k -m HyperbolicTypeModel -a '{"embedding_dim":10, "base_model_name":"distmult", "base_model_arguments":{"embedding_dim":50, "reg":1}}' -l softmax_loss -r 0.5 -g 0.3 -b 4000 -x 2000 -n 200 -z 1 -v 1q
+    '''
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=False, mult=20.0, psi=1.0):
+        super(HyperbolicTypeModel, self).__init__()
+
+        base_model_class = globals()[base_model_name]
+        base_model_arguments['entity_count'] = entity_count
+        base_model_arguments['relation_count'] = relation_count
+        self.base_model = base_model_class(**base_model_arguments)
+
+        self.embedding_dim = embedding_dim
+        self.entity_count = entity_count
+        self.relation_count = relation_count
+        self.unit_reg = unit_reg
+        self.mult = mult
+        self.psi = psi
+        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
+        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        torch.nn.init.normal(self.E_t.weight.data, 0, 0.0005)
+        torch.nn.init.normal(self.R_ht.weight.data, 0, 0.0005)
+        torch.nn.init.normal(self.R_tt.weight.data, 0, 0.0005)
+        self.minimum_value = 0.0
+        self.post_epoch()
+
+
+    def arcosh(self, x):
+        """
+        arcosh(x) = ln(x + sqrt(x^2 - 1))
+        elementwise arcosh operation.
+        """
+        #print(x.max().item(), x.min().item(), "cosh arguments")
+        return torch.log(x + torch.sqrt(x*x-1))
+
+    def hyperbolic_distance(self, x, y):
+        eucledian = ((x-y)*(x-y)).sum(dim=-1)
+        x_euclidian = (x*x).sum(dim=-1)
+        y_euclidian = (y*y).sum(dim=-1)
+        #print(eucledian.max().item(), eucledian.min().item(), "xy_e")
+        #print(x_euclidian.max().item(), x_euclidian.min().item(), "x_e")
+        #print(y_euclidian.max().item(), y_euclidian.min().item(), "y_e")
+        return self.arcosh(1+2*eucledian/((1-x_euclidian)*(1-y_euclidian)))
+
+
+    def forward(self, s, r, o):
+        base_forward = self.base_model(s, r, o)
+        s_t = self.E_t(s)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
+
+
+        head_type_compatibility = -self.hyperbolic_distance(s_t,r_ht)
+        tail_type_compatibility = -self.hyperbolic_distance(o_t,r_tt)
+
+        base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
+        head_type_compatibility = torch.exp(self.psi*head_type_compatibility)
+        tail_type_compatibility = torch.exp(self.psi*tail_type_compatibility)
+        #print(base_forward.mean().item(), head_type_compatibility.mean().item(), tail_type_compatibility.mean().item(), "terms")
+        return self.mult*base_forward*head_type_compatibility*tail_type_compatibility
+
+    def regularizer(self, s, r, o):
+        return self.base_model.regularizer(s, r, o)
+    def grad_process(self):
+        def process(x):
+            x_norms = (x*x).sum(dim=-1, keepdim=True)
+            factor = (1-x_norms)
+            factor = factor*factor/4
+            x.grad.mul_(factor)
+        process(self.E_t.weight)
+        process(self.R_tt.weight)
+        process(self.R_ht.weight)
+
+    def post_epoch(self):
+        def clip(e):
+            norms = e.norm(2, dim=-1, keepdim=True)
+            ge = norms.ge(1).float()
+            le = 1-ge
+            denominator = le+ge*(norms+0.00001)
+            e.div_(denominator)
+        clip(self.E_t.weight.data)
+        clip(self.R_tt.weight.data)
+        clip(self.R_ht.weight.data)
+        if(self.unit_reg):
+            self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
+        return self.base_model.post_epoch()
 
 

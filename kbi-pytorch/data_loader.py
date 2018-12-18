@@ -97,8 +97,8 @@ class data_loader(object):
         :param negative_count: The number of negative samples for each positive fact.
         :return: A list containing s, r, o and negative s and negative o of the batch
         """
-        ls = self.sample_neg_sensitive(batch_size, negative_count)
-        # ls = self.sample(batch_size, negative_count)
+        # ls = self.sample_neg_sensitive(batch_size, negative_count)
+        ls = self.sample(batch_size, negative_count)
         if self.load_to_gpu:
             return [torch.autograd.Variable(torch.from_numpy(x).cuda()) for x in ls]
         else:
