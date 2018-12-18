@@ -361,6 +361,8 @@ class E(torch.nn.Module):
         else:
             return ""
 
+def print_fun(data):
+    print("Prachi Analysis::", data)
 
 class box_typed_model(torch.nn.Module):
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, mult=20.0, box_reg_coef=0.1, box_reg='l2', psi=2.0):
@@ -429,6 +431,8 @@ class box_typed_model(torch.nn.Module):
             reg = (box_sizes_ht*box_sizes_ht + box_sizes_tt*box_sizes_tt).sum()
         else:
             utils.colored_print("red", "unknown regularizer" + str(self.reg))
+        print("ALERT!! ",box_sizes_ht,box_sizes_tt)
+        print_fun("Reg: "+"Tail box: "+str(box_sizes_tt)+" Head box: "+str(box_sizes_ht))
         return reg * self.box_reg_coef + self.base_model.regularizer(s, r, o)
 
     def post_epoch(self):
