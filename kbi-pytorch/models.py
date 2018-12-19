@@ -403,7 +403,7 @@ class box_typed_model(torch.nn.Module):
         distance, _ = distance.max(dim=-1)
         return distance
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
 
@@ -422,8 +422,7 @@ class box_typed_model(torch.nn.Module):
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
 
         ###
-        flag = random.randint(1,10001)
-        if flag%500:
+        if flag_debug:
             score_data = base_forward
             print(score_data.shape)
             print_fun("Scores: Base: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
@@ -431,6 +430,15 @@ class box_typed_model(torch.nn.Module):
             print_fun("Scores: Head: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
             score_data=tail_type_compatibility
             print_fun("Scores: Tail: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
+            #BOX SIZE
+            box_sizes_tt = self.R_tt_high.weight.data - self.R_tt_low.weight.data
+            box_sizes_ht = self.R_ht_high.weight.data - self.R_ht_low.weight.data
+
+            box_size_max = torch.max(box_sizes_tt.abs(),1)[0]
+            print_fun("Tail box size: Mean: "+str((box_size_max.mean(0)))+" Median: "+str((box_size_max.median(0))[0])+" STD: "+str((box_size_max.std(0))[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
+            box_size_max = torch.max(box_sizes_ht.abs(),1)[0]
+            print_fun("Head box size: Mean: "+str((box_size_max.mean(0)))+" Median: "+str((box_size_max.median(0))[0])+" STD: "+str((box_size_max.std(0))[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
+
         ###
 
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility
@@ -447,17 +455,6 @@ class box_typed_model(torch.nn.Module):
         return reg * self.box_reg_coef + self.base_model.regularizer(s, r, o)
 
     def post_epoch(self):
-        ###
-        #box size
-        box_sizes_tt = self.R_tt_high.weight.data - self.R_tt_low.weight.data
-        box_sizes_ht = self.R_ht_high.weight.data - self.R_ht_low.weight.data
-
-        box_size_max = torch.max(box_sizes_tt.abs(),1)[0]
-        print_fun("Tail box size: Mean: "+str((box_size_max.mean(0)))+" Median: "+str((box_size_max.median(0))[0])+" STD: "+str((box_size_max.std(0))[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
-        box_size_max = torch.max(box_sizes_ht.abs(),1)[0]
-        print_fun("Head box size: Mean: "+str((box_size_max.mean(0)))+" Median: "+str((box_size_max.median(0))[0])+" STD: "+str((box_size_max.std(0))[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
-        ###
-
         self.R_ht_high.weight.data, self.R_ht_low.weight.data = torch.max(self.R_ht_high.weight.data, self.R_ht_low.weight.data), torch.min(self.R_ht_high.weight.data, self.R_ht_low.weight.data)
         self.R_tt_high.weight.data, self.R_tt_low.weight.data = torch.max(self.R_tt_high.weight.data, self.R_tt_low.weight.data), torch.min(self.R_tt_high.weight.data, self.R_tt_low.weight.data)
         return self.base_model.post_epoch()

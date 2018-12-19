@@ -1,3 +1,4 @@
+import random
 import numpy
 import time
 import evaluate
@@ -86,10 +87,15 @@ class Trainer(object):
 
     def step(self):
         s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
-        fp = self.scoring_function(s, r, o)
-        fns = self.scoring_function(ns, r, o)
-        fno = self.scoring_function(s, r, no)
-
+        flag = random.randint(1,10001)
+        if flag>9500:
+            flag_debug = 1
+        else:
+            flag_debug = 0
+        fp = self.scoring_function(s, r, o, flag_debug=flag_debug)
+        fns = self.scoring_function(ns, r, o, flag_debug=flag_debug)
+        fno = self.scoring_function(s, r, no, flag_debug=flag_debug)
+        
         if self.regularization_coefficient is not None:
             reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
