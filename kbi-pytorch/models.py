@@ -534,8 +534,8 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
             print_fun("Scores: Tail: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
         if flag_debug>1:
             #BOX SIZE
-            box_sizes_tt = self.R_tt_high.weight.data - self.R_tt_low.weight.data
-            box_sizes_ht = self.R_ht_high.weight.data - self.R_ht_low.weight.data
+            box_sizes_tt = self.R_tt_width.weight.data#self.R_tt_high.weight.data - self.R_tt_low.weight.data
+            box_sizes_ht = self.R_ht_width.weight.data#self.R_ht_high.weight.data - self.R_ht_low.weight.data
 
             box_size_max = torch.max(box_sizes_tt.abs(),1)[0]
             print_fun("Tail box size: Mean: "+str((box_size_max.mean(0)))+" Median: "+str((box_size_max.median(0))[0])+" STD: "+str((box_size_max.std(0))[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
