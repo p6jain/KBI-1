@@ -397,9 +397,10 @@ class box_typed_model(torch.nn.Module):
         self.minimum_value = 0.0
 
     def compute_distance(self, box_low, box_high, point):
-        temporary = box_low - point
+        delta = 0.001
+        temporary = (box_low + delta) - point
         term_1 = torch.max(temporary, torch.zeros(1).cuda() if temporary.is_cuda else torch.zeros(1))
-        distance = torch.max(point - box_high, term_1)
+        distance = torch.max(point - (box_high + delta), term_1)
         distance, _ = distance.max(dim=-1)
         return distance
 
@@ -430,6 +431,7 @@ class box_typed_model(torch.nn.Module):
             print_fun("Scores: Head: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
             score_data=tail_type_compatibility
             print_fun("Scores: Tail: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
+        if flag_debug>1:
             #BOX SIZE
             box_sizes_tt = self.R_tt_high.weight.data - self.R_tt_low.weight.data
             box_sizes_ht = self.R_ht_high.weight.data - self.R_ht_low.weight.data

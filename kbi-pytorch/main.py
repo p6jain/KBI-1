@@ -21,7 +21,7 @@ if not has_cuda:
 def main(dataset_root, save_dir, model_name, model_arguments, loss_function, learning_rate, batch_size,
          regularization_coefficient, gradient_clip, optimizer_name, max_epochs, negative_sample_count, hooks,
          eval_every_x_mini_batches, eval_batch_size, resume_from_save, introduce_oov, verbose):
-
+    print("Prachi::", "with distance margin 0.001")
     tpm = None
     if verbose>0:
         utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")
