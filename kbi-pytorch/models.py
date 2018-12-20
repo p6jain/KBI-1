@@ -462,7 +462,11 @@ class box_typed_model(torch.nn.Module):
         return self.base_model.post_epoch()
 
 
-class box_typed_model2(torch.nn.Module):#box implemented differently
+
+
+
+
+class box_typed_model2(torch.nn.Module):#box model implemented differently
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, mult=20.0, box_reg_coef=0.1, box_reg='l2', psi=2.0):
         super(box_typed_model, self).__init__()
 
@@ -479,48 +483,67 @@ class box_typed_model2(torch.nn.Module):#box implemented differently
         self.box_reg_coef = box_reg_coef
         self.psi = psi
         self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
-        self.R_ht_high = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        self.R_ht_low = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        self.R_tt_high = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        self.R_tt_low = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_ht_width = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_tt_width = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim)
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
-        torch.nn.init.normal_(self.R_ht_high.weight.data, 0, 0.05)
-        torch.nn.init.normal_(self.R_tt_low.weight.data, 0, 0.05)
-        torch.nn.init.normal_(self.R_tt_high.weight.data, 0, 0.05)
-        torch.nn.init.normal_(self.R_ht_low.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_ht_width.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_tt_width.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         #ensuring _low _high are init appropriately..low is low and vice versa
-        self.R_ht_high.weight.data, self.R_ht_low.weight.data = torch.max(self.R_ht_high.weight.data, self.R_ht_low.weight.data), torch.min(self.R_ht_high.weight.data, self.R_ht_low.weight.data)
-        self.R_tt_high.weight.data, self.R_tt_low.weight.data = torch.max(self.R_tt_high.weight.data, self.R_tt_low.weight.data), torch.min(self.R_tt_high.weight.data, self.R_tt_low.weight.data)
-
+        #self.R_ht_width = torch.nn.functional.relu(self.R_ht_width)
+        #self.R_tt_width = torch.nn.functional.relu(self.R_tt_width)
         self.minimum_value = 0.0
 
-    def compute_distance(self, box_low, box_high, point):
-        temporary = box_low - point
+    def compute_distance(self, box, box_width, point):
+        delta = 0.001
+        temporary = (box + delta) - point
         term_1 = torch.max(temporary, torch.zeros(1).cuda() if temporary.is_cuda else torch.zeros(1))
-        distance = torch.max(point - box_high, term_1)
+        distance = torch.max(point - (box + box_width + delta), term_1)
         distance, _ = distance.max(dim=-1)
         return distance
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
 
-        r_ht_low = self.R_ht_low(r)
-        r_ht_high = self.R_ht_high(r)
-        r_tt_low = self.R_tt_low(r)
-        r_tt_high = self.R_tt_high(r)
+        r_ht = self.R_ht(r)
+        r_ht_width = torch.nn.functional.relu(self.R_ht_width(r))#width should be positive
+        r_tt = self.R_tt(r)
+        r_tt_width = torch.nn.functional.relu(self.R_tt_width(r))
 
         o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
 
-        head_type_compatibility = - self.compute_distance(r_ht_low, r_ht_high, s_t)#(s_t*r_ht).sum(-1)
-        tail_type_compatibility = - self.compute_distance(r_tt_low, r_tt_high, o_t)#(o_t*r_tt).sum(-1)
+        head_type_compatibility = - self.compute_distance(r_ht, r_ht_width, s_t)#(s_t*r_ht).sum(-1)
+        tail_type_compatibility = - self.compute_distance(r_tt, r_tt_width, o_t)#(o_t*r_tt).sum(-1)
 
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+
         ###
-        print_fun("Scores: Base: "+str(base_forward)+" Head: "+str(head_type_compatibility)+" Tail: "+str(tail_type_compatibility))
+        if flag_debug:
+            score_data = base_forward
+            print(score_data.shape)
+            print_fun("Scores: Base: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
+            score_data=head_type_compatibility
+            print_fun("Scores: Head: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
+            score_data=tail_type_compatibility
+            print_fun("Scores: Tail: Mean: "+str(score_data.mean())+" Median: "+str(score_data.median()[0])+" STD: "+str(score_data.std()[0])+" MAX: "+str(torch.max(score_data))+" MIN: "+str(torch.min(score_data)))
+        if flag_debug>1:
+            #BOX SIZE
+            box_sizes_tt = self.R_tt_high.weight.data - self.R_tt_low.weight.data
+            box_sizes_ht = self.R_ht_high.weight.data - self.R_ht_low.weight.data
+
+            box_size_max = torch.max(box_sizes_tt.abs(),1)[0]
+            print_fun("Tail box size: Mean: "+str((box_size_max.mean(0)))+" Median: "+str((box_size_max.median(0))[0])+" STD: "+str((box_size_max.std(0))[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
+            box_size_max = torch.max(box_sizes_ht.abs(),1)[0]
+            print_fun("Head box size: Mean: "+str((box_size_max.mean(0)))+" Median: "+str((box_size_max.median(0))[0])+" STD: "+str((box_size_max.std(0))[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
+
         ###
+
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility
 
     def regularizer(self, s, r, o):
@@ -535,22 +558,6 @@ class box_typed_model2(torch.nn.Module):#box implemented differently
         return reg * self.box_reg_coef + self.base_model.regularizer(s, r, o)
 
     def post_epoch(self):
-        ###
-        #box size
-        box_sizes_tt = self.R_tt_high.weight.data - self.R_tt_low.weight.data
-        box_sizes_ht = self.R_ht_high.weight.data - self.R_ht_low.weight.data
-
-        box_size_max = torch.max(box_sizes_tt.abs(),1)[0]
-        print_fun("Tail box size: Mean: "+str(box_size_max.mean(0))+" Median: "+str(box_size_max.median(0)[0])+" STD: "+str(box_size_max.std(0)[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
-        box_size_max = torch.max(box_sizes_ht.abs(),1)[0]
-        print_fun("Head box size: Mean: "+str(box_size_max.mean(0))+" Median: "+str(box_size_max.median(0)[0])+" STD: "+str(box_size_max.std(0)[0])+" Max: "+str(torch.max(box_size_max))+" Min: "+str(torch.min(box_size_max)))
-        ###
-
-        self.R_ht_high.weight.data, self.R_ht_low.weight.data = torch.max(self.R_ht_high.weight.data, self.R_ht_low.weight.data), torch.min(self.R_ht_high.weight.data, self.R_ht_low.weight.data)
-        self.R_tt_high.weight.data, self.R_tt_low.weight.data = torch.max(self.R_tt_high.weight.data, self.R_tt_low.weight.data), torch.min(self.R_tt_high.weight.data, self.R_tt_low.weight.data)
-        return self.base_model.post_epoch()
-
-
-
-
-
+        #self.R_ht_high.weight.data, self.R_ht_low.weight.data = torch.max(self.R_ht_high.weight.data, self.R_ht_low.weight.data), torch.min(self.R_ht_high.weight.data, self.R_ht_low.weight.data)
+        #self.R_tt_high.weight.data, self.R_tt_low.weight.data = torch.max(self.R_tt_high.weight.data, self.R_tt_low.weight.data), torch.min(self.R_tt_high.weight.data, self.R_tt_low.weight.data)
+        return ''#self.base_model.post_epoch()
