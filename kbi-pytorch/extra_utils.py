@@ -2,7 +2,7 @@ import torch
 import sklearn.decomposition
 import sklearn.manifold
 import numpy
-from mpl_toolkits.mplot3d import Axes3D
+#from mpl_toolkits.mplot3d import Axes3D
 import kb
 #import matplotlib.pyplot
 

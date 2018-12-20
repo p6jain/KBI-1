@@ -468,7 +468,7 @@ class box_typed_model(torch.nn.Module):
 
 class box_typed_model2(torch.nn.Module):#box model implemented differently
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, mult=20.0, box_reg_coef=0.1, box_reg='l2', psi=2.0):
-        super(box_typed_model, self).__init__()
+        super(box_typed_model2, self).__init__()
 
         base_model_class = globals()[base_model_name]
         base_model_arguments['entity_count'] = entity_count
@@ -547,8 +547,8 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility
 
     def regularizer(self, s, r, o):
-        box_sizes_tt = self.R_tt_high.weight.data - self.R_tt_low.weight.data
-        box_sizes_ht = self.R_ht_high.weight.data - self.R_ht_low.weight.data
+        box_sizes_tt = self.R_tt_width.weight.data#self.R_tt_high.weight.data - self.R_tt_low.weight.data
+        box_sizes_ht = self.R_ht_width.weight.data#self.R_ht_high.weight.data - self.R_ht_low.weight.data
         if(self.box_reg == 'l1'):
             reg = (box_sizes_ht.abs() + box_sizes_tt.abs()).sum() #l1
         elif (self.box_reg == 'l2'):

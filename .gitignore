@@ -1,2 +1,8 @@
 .DS_store
 *.pyc
+kbi-keras/*
+kbi-keras
+data/*
+logs/*
+kbi-pytorch/data
+kbi-pytorch/logs
