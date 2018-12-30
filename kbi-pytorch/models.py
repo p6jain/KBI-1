@@ -404,6 +404,23 @@ class box_typed_model(torch.nn.Module):
         distance, _ = distance.max(dim=-1)
         return distance
 
+    def compute_distance2(self, box_low, box_high, point):
+        delta = 0.0#01
+        temporary = (box_low + delta) - point
+        term_1 = torch.max(temporary, torch.zeros(1).cuda() if temporary.is_cuda else torch.zeros(1))
+        distance = torch.max(point - (box_high + delta), term_1)
+        distance, _ = distance.max(dim=-1)
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        z = (distance == 0).to(device, dtype=torch.float32)
+        nz = (distance > 0).to(device, dtype=torch.float32)
+        #print(point.shape,box_low.shape,((point*point).sum(dim=-1)).shape, ((point*box_low).sum(dim=-1)).shape)
+        #print(z.shape, nz.shape)
+        distance = (z*((point*point).sum(dim=-1))) + (nz*(torch.max((point*box_low).sum(dim=-1), (point*box_high).sum(dim=-1))))
+        #distance, _ = distance.max(dim=-1)
+        
+        return distance
+
     def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
@@ -415,8 +432,8 @@ class box_typed_model(torch.nn.Module):
 
         o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
 
-        head_type_compatibility = - self.compute_distance(r_ht_low, r_ht_high, s_t)#(s_t*r_ht).sum(-1)
-        tail_type_compatibility = - self.compute_distance(r_tt_low, r_tt_high, o_t)#(o_t*r_tt).sum(-1)
+        head_type_compatibility = - self.compute_distance2(r_ht_low, r_ht_high, s_t)#(s_t*r_ht).sum(-1)
+        tail_type_compatibility = - self.compute_distance2(r_tt_low, r_tt_high, o_t)#(o_t*r_tt).sum(-1)
 
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
@@ -452,6 +469,8 @@ class box_typed_model(torch.nn.Module):
             reg = (box_sizes_ht.abs() + box_sizes_tt.abs()).sum() #l1
         elif (self.box_reg == 'l2'):
             reg = (box_sizes_ht*box_sizes_ht + box_sizes_tt*box_sizes_tt).sum()
+            #
+            reg += (self.E_t.weight.data * self.E_t.weight.data).sum()
         else:
             utils.colored_print("red", "unknown regularizer" + str(self.reg))
         return reg * self.box_reg_coef + self.base_model.regularizer(s, r, o)
@@ -505,6 +524,23 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
         distance, _ = distance.max(dim=-1)
         return distance
 
+    def compute_distance2(self, box_low, box_high, point):
+        delta = 0.0#01
+        temporary = (box_low + delta) - point
+        term_1 = torch.max(temporary, torch.zeros(1).cuda() if temporary.is_cuda else torch.zeros(1))
+        distance = torch.max(point - (box_high + delta), term_1)
+        distance, _ = distance.max(dim=-1)
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        z = (distance == 0).to(device, dtype=torch.float32)
+        nz = (distance > 0).to(device, dtype=torch.float32)
+        #print(point.shape,box_low.shape,((point*point).sum(dim=-1)).shape, ((point*box_low).sum(dim=-1)).shape)
+        #print(z.shape, nz.shape)
+        distance = (z*((point*point).sum(dim=-1))) + (nz*(torch.max((point*box_low).sum(dim=-1), (point*box_high).sum(dim=-1))))
+        #distance, _ = distance.max(dim=-1)
+
+        return distance
+
     def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
@@ -516,8 +552,8 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
 
         o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
 
-        head_type_compatibility = - self.compute_distance(r_ht, r_ht_width, s_t)#(s_t*r_ht).sum(-1)
-        tail_type_compatibility = - self.compute_distance(r_tt, r_tt_width, o_t)#(o_t*r_tt).sum(-1)
+        head_type_compatibility = - self.compute_distance2(r_ht, r_ht_width, s_t)#(s_t*r_ht).sum(-1)
+        tail_type_compatibility = - self.compute_distance2(r_tt, r_tt_width, o_t)#(o_t*r_tt).sum(-1)
 
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
@@ -553,6 +589,8 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
             reg = (box_sizes_ht.abs() + box_sizes_tt.abs()).sum() #l1
         elif (self.box_reg == 'l2'):
             reg = (box_sizes_ht*box_sizes_ht + box_sizes_tt*box_sizes_tt).sum()
+            # 
+            reg += (self.E_t.weight.data * self.E_t.weight.data).sum()
         else:
             utils.colored_print("red", "unknown regularizer" + str(self.reg))
         return reg * self.box_reg_coef + self.base_model.regularizer(s, r, o)
