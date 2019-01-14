@@ -524,8 +524,9 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
         distance, _ = distance.max(dim=-1)
         return distance
 
-    def compute_distance2(self, box_low, box_high, point):
+    def compute_distance2(self, box_low, box_width, point):
         delta = 0.0#01
+        box_high = box_low + box_width
         temporary = (box_low + delta) - point
         term_1 = torch.max(temporary, torch.zeros(1).cuda() if temporary.is_cuda else torch.zeros(1))
         distance = torch.max(point - (box_high + delta), term_1)
@@ -590,7 +591,7 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
         elif (self.box_reg == 'l2'):
             reg = (box_sizes_ht*box_sizes_ht + box_sizes_tt*box_sizes_tt).sum()
             # 
-            reg += (self.E_t.weight.data * self.E_t.weight.data).sum()
+            #reg += (self.E_t.weight.data * self.E_t.weight.data).sum()
         else:
             utils.colored_print("red", "unknown regularizer" + str(self.reg))
         return reg * self.box_reg_coef + self.base_model.regularizer(s, r, o)
