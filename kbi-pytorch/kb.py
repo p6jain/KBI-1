@@ -19,6 +19,7 @@ class kb(object):
         self.type_entity_range = {} if type_entity_range is None else type_entity_range
         self.reverse_entity_map = {} if rem is None else rem
         self.reverse_relation_map = {} if rrm is None else rrm
+        self.entity_id_image_matrix = None
         if filename is None:
             return
         facts = []
@@ -31,22 +32,46 @@ class kb(object):
                 if(add_unknowns):
                     if(l[1] not in self.relation_map):
                         self.reverse_relation_map[len(self.relation_map)] = l[1]
-                        self.relation_map[l[1]] = len(self.relation_map)                   
+                        self.relation_map[l[1]] = len(self.relation_map)
                     if(l[0] not in self.entity_map):
                         self.reverse_entity_map[len(self.entity_map)] = l[0]
                         self.entity_map[l[0]] = len(self.entity_map)
                     if(l[2] not in self.entity_map):
                         self.reverse_entity_map[len(self.entity_map)] = l[2]
-                        self.entity_map[l[2]] = len(self.entity_map)                
-                            
+                        self.entity_map[l[2]] = len(self.entity_map)
+
 
                 facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
                         len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
         self.facts = numpy.array(facts, dtype='int64')
 
-    def augment_type_information(self, mapping, enm=None, tnm=None):
+    def augment_image_information(self, mapping):
         """
         Augments the current knowledge base with entity type information for more detailed evaluation.\n
+        :param mapping: The maping from entity to types. Expected to be a int to int dict
+        :return: None
+        """
+
+        self.entity_mid_image_map = mapping
+        entity_id_image_map = {}
+
+        for x in self.entity_mid_image_map:
+            entity_id_image_map[self.entity_map[x]] = self.entity_mid_image_map[x]
+        self.entity_id_image_map = entity_id_image_map#
+
+        size_details = tuple([len(self.entity_mid_image_map)]+list(self.entity_mid_image_map[x].shape[1:]))
+        entity_id_image_matrix = numpy.zeros(size_details)
+        for x in self.entity_mid_image_map:
+            entity_id_image_matrix[self.entity_map[x]] = self.entity_mid_image_map[x]
+
+        self.entity_id_image_matrix_np = numpy.array(entity_id_image_matrix, dtype = numpy.long)#
+        entity_id_image_matrix = torch.from_numpy(numpy.array(entity_id_image_matrix))
+        self.entity_id_image_matrix = entity_id_image_matrix#
+
+
+    def augment_type_information(self, path_to_image_folder, enm=None, tnm=None):
+        """
+        Augments the current knowledge base with entity image information.\n
         :param mapping: The maping from entity to types. Expected to be a int to int dict
         :return: None
         """
@@ -74,7 +99,7 @@ class kb(object):
         for i in range(self.facts.shape[0]):
             entities[self.facts[i][1]].add(self.facts[i][index])
         return numpy.array([len(x) for x in entities])
-        
+
 
 def union(kb_list):
     """
@@ -108,6 +133,3 @@ def dump_kb_mappings(kb, kb_name):
     """
     dump_mappings(kb.entity_map, kb_name+".entity")
     dump_mappings(kb.relation_map, kb_name+".relation")
-
-
-

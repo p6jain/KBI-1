@@ -35,12 +35,17 @@ class data_loader(object):
         if self.first_zero:
             ns[:, 0] = len(self.kb.entity_map)-1
             no[:, 0] = len(self.kb.entity_map)-1
-        return [s, r, o, ns, no]
+
+        s_image, o_image = (0,0)
+        if self.entity_id_image_matrix:
+            s_image = entity_id_image_matrix[s]
+            o_image = entity_id_image_matrix[o]
+        return [s, r, o, ns, no, s_image, o_image]
 
     def sample_outside_type_range(self, type_exclude, negative_count):
-        start, end = self.kb.type_entity_range[type_exclude] # 
+        start, end = self.kb.type_entity_range[type_exclude] #
         #start = end = int(len(self.kb.entity_map)/2.0)
-        diff1 = start 
+        diff1 = start
         diff2 = len(self.kb.entity_map) - end - 1 #
         ratio = 1.0*(diff1)/(diff2+diff1)
         if int(ratio * negative_count) >= 1 and (negative_count - int(ratio * negative_count)) > 1:

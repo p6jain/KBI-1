@@ -37,7 +37,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
             reverse_entity_map = {}
             for k,v in entity_map.items():
                 reverse_entity_map[v] = k
- 
+
     else:
         entity_map, reverse_entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm)
 
@@ -49,6 +49,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
                   add_unknowns=not introduce_oov)
     kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
                    add_unknowns=not introduce_oov)
+
     if(verbose > 0):
         enm = extra_utils.fb15k_entity_name_map_fine()
         tnm = extra_utils.fb15k_type_name_map_fine()
@@ -56,6 +57,12 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         ktest.augment_type_information(tpm,enm,tnm)
         kvalid.augment_type_information(tpm,enm,tnm)
         hooks = extra_utils.load_hooks(hooks, ktrain)
+
+    if model_name == "image_model":
+        eim = extra_utils.fb15k_entity_image_map()
+        ktrain.augment_image_information(eim)
+        ktest.augment_image_information(eim)
+        kvalid.augment_image_information(eim)
 
     dltrain = data_loader.data_loader(ktrain, has_cuda)
     dlvalid = data_loader.data_loader(kvalid, has_cuda)
@@ -71,10 +78,19 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
 
     if(not eval_batch_size):
         eval_batch_size = max(50, batch_size*2*negative_sample_count//len(ktrain.entity_map))
-    tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
+
+    if model_name == "image_model":
+        tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
+                         batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
+                         save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
+                         regularization_coefficient=regularization_coefficient, verbose=verbose,
+                         image_compatibility = scoring_function.image_compatibility, image_compatibility_coefficient = 0.01)
+    else:
+        tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
                          regularization_coefficient=regularization_coefficient, verbose=verbose)
+
     if resume_from_save:
         mb_start = tr.load_state(resume_from_save)
     else:

@@ -11,11 +11,13 @@ import os
 class Trainer(object):
     def __init__(self, scoring_function, regularizer, loss, optim, train, valid, test, verbose=0, batch_size=1000,
                  hooks=None , eval_batch=100, negative_count=10, gradient_clip=None, regularization_coefficient=0.01,
-                 save_dir="./logs"):
+                 save_dir="./logs", image_compatibility = None, image_compatibility_coefficient = 0.01):
         super(Trainer, self).__init__()
         self.scoring_function = scoring_function
         self.loss = loss
         self.regularizer = regularizer
+        self.image_compatibility = image_compatibility
+
         self.train = train
         self.test = test
         self.valid = valid
@@ -59,7 +61,7 @@ class Trainer(object):
             debug = self.scoring_function.post_epoch()
 
 
-        #only type correct samples ---- neg_count/10 
+        #only type correct samples ---- neg_count/10
         fns2 = self.scoring_function(ns2, r, o)
         fno2 = self.scoring_function(s, r, no2)
 
@@ -86,7 +88,7 @@ class Trainer(object):
         return x, rg, debug
 
     def step(self):
-        s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+        s, r, o, ns, no, s_image, o_image = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
         if flag>9600:
@@ -100,13 +102,21 @@ class Trainer(object):
             fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
         else:
             fns = self.scoring_function(ns, r, o, flag_debug=0)
-            fno = self.scoring_function(s, r, no, flag_debug=0) 
+            fno = self.scoring_function(s, r, no, flag_debug=0)
         if self.regularization_coefficient is not None:
             reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
         else:
             reg = 0
+
+        if s_image and o_image:
+            ic_score_s, ic_score_o = self.image_compatibility(s, o, s_image, o_image)
+        else:
+            ic_score_s = 0; ic_score_o = 0
+
         loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
+                + self.image_compatibility_coefficient*(ic_score_s+ic_score_o)
+
         x = loss.item()
         rg = reg.item()
         self.optim.zero_grad()
@@ -138,13 +148,14 @@ class Trainer(object):
         state['reverse_entity_map'] = self.train.kb.reverse_entity_map
         state['type_entity_range'] = self.train.kb.type_entity_range
 
-        filename = os.path.join(self.save_directory, "epoch_%.1f_val_%5.2f_%5.2f_%5.2f_test_%5.2f_%5.2f_%5.2f.pt"%(state['epoch'],
-                                                                                           state['valid_score_e2']['mrr'], 
-                                                                                           state['valid_score_e1']['mrr'], 
-                                                                                           state['valid_score_m']['mrr'],
-                                                                                           state['test_score_e2']['mrr'],
-                                                                                           state['test_score_e1']['mrr'],
-                                                                                           state['test_score_m']['mrr']))
+        filename = os.path.join(self.save_directory,
+                                    "epoch_%.1f_val_%5.2f_%5.2f_%5.2f_test_%5.2f_%5.2f_%5.2f.pt"%(state['epoch'],
+                                           state['valid_score_e2']['mrr'],
+                                           state['valid_score_e1']['mrr'],
+                                           state['valid_score_m']['mrr'],
+                                           state['test_score_e2']['mrr'],
+                                           state['test_score_e1']['mrr'],
+                                           state['test_score_m']['mrr']))
 
 
         #torch.save(state, filename)
@@ -154,7 +165,7 @@ class Trainer(object):
                                           "valid",str(state['valid_score_e2']), "test",str(state["test_score_e2"]),
                                           "valid_e1",str(state['valid_score_e1']),"test_e1",str(state["test_score_e1"]))
                 best_name = os.path.join(self.save_directory, "best_valid_model.pt")
-                self.best_mrr_on_valid = {"valid_m":state['valid_score_m'], "test_m":state["test_score_m"], 
+                self.best_mrr_on_valid = {"valid_m":state['valid_score_m'], "test_m":state["test_score_m"],
                                           "valid":state['valid_score_e2'], "test":state["test_score_e2"],
                                           "valid_e1":state['valid_score_e1'], "test_e1":state["test_score_e1"]}
 
@@ -207,4 +218,3 @@ class Trainer(object):
         print("Ending")
         print(self.best_mrr_on_valid["valid"])
         print(self.best_mrr_on_valid["test"])
-

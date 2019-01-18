@@ -5,6 +5,8 @@ import numpy
 #from mpl_toolkits.mplot3d import Axes3D
 import kb
 #import matplotlib.pyplot
+from PIL import Image
+from torchvision import transforms
 
 def plot_weights(w, sne=False):
     w = w.cpu().numpy()
@@ -106,6 +108,33 @@ def fb15k_type_map_fine():
         result[line[0]] = int(line[3])
     return result
 
+
+def load_image(image_path):
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406),
+                             (0.229, 0.224, 0.225))])
+
+    image = Image.open(image_path)
+    image = image.resize([224, 224], Image.LANCZOS)
+
+    if transform is not None:
+        image = transform(image).unsqueeze(0)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    image_tensor = image.to(device)
+
+    return image_tensor
+
+def fb15k_entity_image_map():
+    path_to_image_folder="data/fb15k/all_resize"
+    ip = open("data/fb15k/mid_image_path.txt").readlines()
+    ip = [ele.strip("\n").split("\t") for ele in ip]
+    mid_image_map = {}
+    for line in ip:
+        mid_image_map[line[0]] = load_image(path_to_image_folder+line[1])
+    return mid_image_map
+
 def fb15k_entity_name_map_fine():
     fl = open("data/fb15k/entity_mid_name_type_typeid.txt").readlines()
     fl = [x.strip().split('\t') for x in fl]
@@ -162,22 +191,22 @@ def load_hooks(hooks, kb):
         result.append(hook_class(**hook_param['arguments']))
     return result
 
-def get_entity_relation_id_neg_sensitive(mapping): 
-    
+def get_entity_relation_id_neg_sensitive(mapping):
+
     if mapping is None:
         return None,None
-    type_entity_sets={}; entity_map={}; reverse_entity_map={} 
-    for entity, entity_type in mapping.items(): 
-        if entity_type not in type_entity_sets: 
-            type_entity_sets[entity_type]=set() 
-        type_entity_sets[entity_type].add(entity) 
-         
-    type_entity_range = {} 
-    count=0 
-    for typeid, typeset in type_entity_sets.items(): 
-        type_entity_range[typeid] = (count, count+len(typeset)-1) 
+    type_entity_sets={}; entity_map={}; reverse_entity_map={}
+    for entity, entity_type in mapping.items():
+        if entity_type not in type_entity_sets:
+            type_entity_sets[entity_type]=set()
+        type_entity_sets[entity_type].add(entity)
+
+    type_entity_range = {}
+    count=0
+    for typeid, typeset in type_entity_sets.items():
+        type_entity_range[typeid] = (count, count+len(typeset)-1)
         for ent in typeset:
-            entity_map[ent] = count 
+            entity_map[ent] = count
             reverse_entity_map[count] = ent
             count+= 1
 

@@ -215,6 +215,100 @@ class typed_model(torch.nn.Module):
             self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
         return self.base_model.post_epoch()
 
+class EncoderCNN(torch.nn.Module):
+    def __init__(self, embed_size):
+        """Load the pretrained ResNet-152 and replace top fc layer."""
+        super(EncoderCNN, self).__init__()
+        resnet = models.resnet152(pretrained=True)
+        modules = list(resnet.children())[:-1]      # delete the last fc layer.
+        self.resnet = nn.Sequential(*modules)
+        self.linear = nn.Linear(resnet.fc.in_features, embed_size)
+        self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
+
+    def forward(self, images):
+        """Extract feature vectors from input images."""
+        with torch.no_grad():
+            features = self.resnet(images)
+        features = features.reshape(features.size(0), -1)
+        features = self.bn(self.linear(features))
+        return features
+
+class image_model(torch.nn.Module):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0):
+        super(image_model, self).__init__()
+
+        base_model_class = globals()[base_model_name]
+        base_model_arguments['entity_count'] = entity_count
+        base_model_arguments['relation_count'] = relation_count
+        self.base_model = base_model_class(**base_model_arguments)
+
+        self.embedding_dim = embedding_dim
+        self.entity_count = entity_count
+        self.relation_count = relation_count
+        self.unit_reg = unit_reg
+        self.mult = mult
+        self.psi = psi
+        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
+        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
+        self.minimum_value = 0.0
+
+        #image model
+        self.image_model = EncoderCNN(self.embedding_dim)
+
+    def forward(self, s, r, o):
+        base_forward = self.base_model(s, r, o)
+        s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
+        head_type_compatibility = (s_t*r_ht).sum(-1)
+        tail_type_compatibility = (o_t*r_tt).sum(-1)
+        base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
+        head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
+        tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+        return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
+
+    def regularizer(self, s, r, o):
+        """
+        s_t = self.E_t(s)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o)
+        reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
+        return self.base_model.regularizer(s, r, o) + reg
+        """
+        return self.base_model.regularizer(s, r, o)
+
+    def image_compatibility(self, s, o, s_image, o_image):
+        '''
+        need to write a seperate function for evaluation scores
+        -- as we plan to prestore all entity's image embeddings
+        '''
+        s_t = self.E_t(s) #if s is not None else self.E_t.weight.unsqueeze(0)
+        o_t = self.E_t(o) #if o is not None else self.E_t.weight.unsqueeze(0)
+
+        s_image = self.image_model(s_image)
+        o_image = self.image_model(o_image)
+
+        s_image_compatibility = (s_t * s_image).sum(-1)
+        o_image_compatibility = (o_t * o_image).sum(-1)
+        ##
+        s_image_compatibility = torch.nn.Sigmoid()(self.psi*s_image_compatibility)
+        o_image_compatibility = torch.nn.Sigmoid()(self.psi*o_image_compatibility)
+
+        return s_image_compatibility, o_image_compatibility
+
+    def post_epoch(self):
+        if(self.unit_reg):
+            self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
+        return self.base_model.post_epoch()
+
 
 class DME(torch.nn.Module):
     """
@@ -418,7 +512,7 @@ class box_typed_model(torch.nn.Module):
         #print(z.shape, nz.shape)
         distance = (z*((point*point).sum(dim=-1))) + (nz*(torch.max((point*box_low).sum(dim=-1), (point*box_high).sum(dim=-1))))
         #distance, _ = distance.max(dim=-1)
-        
+
         return distance
 
     def forward(self, s, r, o, flag_debug=0):
@@ -590,7 +684,7 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
             reg = (box_sizes_ht.abs() + box_sizes_tt.abs()).sum() #l1
         elif (self.box_reg == 'l2'):
             reg = (box_sizes_ht*box_sizes_ht + box_sizes_tt*box_sizes_tt).sum()
-            # 
+            #
             #reg += (self.E_t.weight.data * self.E_t.weight.data).sum()
         else:
             utils.colored_print("red", "unknown regularizer" + str(self.reg))
