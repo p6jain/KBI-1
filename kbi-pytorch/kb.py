@@ -19,7 +19,7 @@ class kb(object):
         self.type_entity_range = {} if type_entity_range is None else type_entity_range
         self.reverse_entity_map = {} if rem is None else rem
         self.reverse_relation_map = {} if rrm is None else rrm
-        self.entity_id_image_matrix = None
+        self.entity_id_image_matrix = {}
         if filename is None:
             return
         facts = []
@@ -69,17 +69,12 @@ class kb(object):
         self.entity_id_image_matrix = entity_id_image_matrix#
 
 
-    def augment_type_information(self, path_to_image_folder, enm=None, tnm=None):
+    def augment_type_information(self, mapping, enm=None, tnm=None):
         """
         Augments the current knowledge base with entity image information.\n
         :param mapping: The maping from entity to types. Expected to be a int to int dict
         :return: None
         """
-
-        self.entity_name_map = enm
-        self.type_name_map = tnm
-
-
         self.type_map = mapping
         entity_type_matrix = numpy.zeros((len(self.entity_map), 1))
         for x in self.type_map:

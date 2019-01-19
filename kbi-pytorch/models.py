@@ -34,7 +34,7 @@ class distmult(torch.nn.Module):
         self.minimum_value = -self.embedding_dim*self.embedding_dim
         self.clamp_v = clamp_v
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         """
         This is the scoring function \n
         :param s: The entities corresponding to the subject position. Must be a torch long tensor of 2 dimensions batch * x
@@ -106,7 +106,7 @@ class complex(torch.nn.Module):
         self.minimum_value = -self.embedding_dim*self.embedding_dim
         self.clamp_v = clamp_v
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         s_im = self.E_im(s) if s is not None else self.E_im.weight.unsqueeze(0)
         r_im = self.R_im(r)
         o_im = self.E_im(o) if o is not None else self.E_im.weight.unsqueeze(0)
@@ -151,7 +151,7 @@ class adder_model(torch.nn.Module):
         self.model2 = model2(**model2_arguments)
         self.minimum_value = self.model1.minimum_value + self.model2.minimum_value
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         return self.model1(s, r, o) + self.model2(s, r, o)
 
     def post_epoch(self):
@@ -184,7 +184,7 @@ class typed_model(torch.nn.Module):
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
         self.minimum_value = 0.0
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
@@ -225,7 +225,7 @@ class EncoderCNN(torch.nn.Module):
         self.linear = nn.Linear(resnet.fc.in_features, embed_size)
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
 
-    def forward(self, images):
+    def forward(self, images, flag_debug=0):
         """Extract feature vectors from input images."""
         with torch.no_grad():
             features = self.resnet(images)
@@ -259,7 +259,7 @@ class image_model(torch.nn.Module):
         #image model
         self.image_model = EncoderCNN(self.embedding_dim)
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
@@ -340,7 +340,7 @@ class DME(torch.nn.Module):
         self.clamp_v = clamp_v
         self.diplay_norms=display_norms
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         s_DM = self.E_DM(s) if s is not None else self.E_DM.weight.unsqueeze(0)
         r_DM = self.R_DM(r)
         o_DM = self.E_DM(o) if o is not None else self.E_DM.weight.unsqueeze(0)
@@ -420,7 +420,7 @@ class E(torch.nn.Module):
         self.clamp_v = clamp_v
         self.display_norms = display_norms
 
-    def forward(self, s, r, o):
+    def forward(self, s, r, o, flag_debug=0):
         s = self.E(s) if s is not None else self.E.weight.unsqueeze(0)
         r_head = self.R_head(r)
         r_tail = self.R_tail(r)

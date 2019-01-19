@@ -17,6 +17,7 @@ class Trainer(object):
         self.loss = loss
         self.regularizer = regularizer
         self.image_compatibility = image_compatibility
+        self.image_compatibility_coefficient = image_compatibility_coefficient
 
         self.train = train
         self.test = test
@@ -114,8 +115,7 @@ class Trainer(object):
         else:
             ic_score_s = 0; ic_score_o = 0
 
-        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
-                + self.image_compatibility_coefficient*(ic_score_s+ic_score_o)
+        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg + self.image_compatibility_coefficient*(ic_score_s+ic_score_o)
 
         x = loss.item()
         rg = reg.item()

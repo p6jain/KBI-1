@@ -127,7 +127,7 @@ def load_image(image_path):
     return image_tensor
 
 def fb15k_entity_image_map():
-    path_to_image_folder="data/fb15k/all_resize"
+    path_to_image_folder="data/fb15k/all_resize/"
     ip = open("data/fb15k/mid_image_path.txt").readlines()
     ip = [ele.strip("\n").split("\t") for ele in ip]
     mid_image_map = {}
@@ -209,5 +209,5 @@ def get_entity_relation_id_neg_sensitive(mapping):
             entity_map[ent] = count
             reverse_entity_map[count] = ent
             count+= 1
-
+    #print("DEBUG: ",entity_map, reverse_entity_map, type_entity_range)
     return entity_map, reverse_entity_map, type_entity_range
