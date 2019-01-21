@@ -121,7 +121,7 @@ def load_image(image_path):
     if transform is not None:
         image = transform(image).unsqueeze(0)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')#'cuda' if torch.cuda.is_available() else 'cpu')
     image_tensor = image.to(device)
 
     return image_tensor

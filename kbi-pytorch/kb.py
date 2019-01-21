@@ -19,7 +19,7 @@ class kb(object):
         self.type_entity_range = {} if type_entity_range is None else type_entity_range
         self.reverse_entity_map = {} if rem is None else rem
         self.reverse_relation_map = {} if rrm is None else rrm
-        self.entity_id_image_matrix = {}
+        self.entity_id_image_matrix = numpy.array([0])
         if filename is None:
             return
         facts = []
@@ -54,18 +54,28 @@ class kb(object):
 
         self.entity_mid_image_map = mapping
         entity_id_image_map = {}
-
+        #print("Prachi","kb","1")
         for x in self.entity_mid_image_map:
             entity_id_image_map[self.entity_map[x]] = self.entity_mid_image_map[x]
+        #print("Prachi","kb","2")
         self.entity_id_image_map = entity_id_image_map#
-
-        size_details = tuple([len(self.entity_mid_image_map)]+list(self.entity_mid_image_map[x].shape[1:]))
+        #print("Prachi","kb","3")
+        #size_details = tuple([len(self.entity_mid_image_map)]+list(self.entity_mid_image_map[x].shape[1:]))
+        size_details = tuple([len(self.entity_map)]+list(self.entity_mid_image_map[x].shape[1:]))
         entity_id_image_matrix = numpy.zeros(size_details)
-        for x in self.entity_mid_image_map:
-            entity_id_image_matrix[self.entity_map[x]] = self.entity_mid_image_map[x]
-
+        #print("Prachi","kb","4")
+        oov_image=numpy.random.rand(1, 3, 224, 224);oov_count=0
+        for x in self.entity_map:#self.entity_mid_image_map:
+            if x in self.entity_mid_image_map.keys():
+                entity_id_image_matrix[self.entity_map[x]] = self.entity_mid_image_map[x]
+            else:
+                entity_id_image_matrix[self.entity_map[x]] = oov_image
+                oov_count+=1
+        #print("Prachi","kb","5", oov_count)
         self.entity_id_image_matrix_np = numpy.array(entity_id_image_matrix, dtype = numpy.long)#
+        #print("Prachi","kb","6")
         entity_id_image_matrix = torch.from_numpy(numpy.array(entity_id_image_matrix))
+        #print("Prachi","kb","7")
         self.entity_id_image_matrix = entity_id_image_matrix#
 
 

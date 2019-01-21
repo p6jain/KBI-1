@@ -11,8 +11,10 @@ import os
 class Trainer(object):
     def __init__(self, scoring_function, regularizer, loss, optim, train, valid, test, verbose=0, batch_size=1000,
                  hooks=None , eval_batch=100, negative_count=10, gradient_clip=None, regularization_coefficient=0.01,
-                 save_dir="./logs", image_compatibility = None, image_compatibility_coefficient = 0.01):
+                 save_dir="./logs", model_name = None, image_compatibility = None, image_compatibility_coefficient = 0.01):
         super(Trainer, self).__init__()
+        self.model_name = model_name        
+
         self.scoring_function = scoring_function
         self.loss = loss
         self.regularizer = regularizer
@@ -89,6 +91,42 @@ class Trainer(object):
         return x, rg, debug
 
     def step(self):
+        s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+
+        flag = random.randint(1,10001)
+        if flag>9600:
+            flag_debug = 1
+        else:
+            flag_debug = 0
+
+        fp = self.scoring_function(s, r, o, flag_debug=flag_debug)
+        if flag_debug:
+            fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
+            fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+        else:
+            fns = self.scoring_function(ns, r, o, flag_debug=0)
+            fno = self.scoring_function(s, r, no, flag_debug=0)
+        if self.regularization_coefficient is not None:
+            reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
+        else:
+            reg = 0
+
+        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
+
+        x = loss.item()
+        rg = reg.item()
+        self.optim.zero_grad()
+        loss.backward()
+        if(self.gradient_clip is not None):
+            torch.nn.utils.clip_grad_norm(self.scoring_function.parameters(), self.gradient_clip)
+        self.optim.step()
+        debug = ""
+        if "post_epoch" in dir(self.scoring_function):
+            debug = self.scoring_function.post_epoch()
+        return x, rg, debug
+
+    def step_aux(self):
         s, r, o, ns, no, s_image, o_image = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
@@ -110,12 +148,16 @@ class Trainer(object):
         else:
             reg = 0
 
-        if s_image and o_image:
-            ic_score_s, ic_score_o = self.image_compatibility(s, o, s_image, o_image)
-        else:
-            ic_score_s = 0; ic_score_o = 0
+        ic_score_s, ic_score_o = self.image_compatibility(s, o, s_image, o_image)
 
-        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg + self.image_compatibility_coefficient*(ic_score_s+ic_score_o)
+        #print("Prachi Debug", "ic_score_s",ic_score_s.shape)
+        #print("Prachi Debug", "reg", reg.shape, reg)
+        tmp=self.loss(fp, fns, fno)
+        #print("Prachi Debug", "self.loss(fp, fns, fno)", tmp.shape, tmp)
+
+        image_compatibility_loss = torch.mean(ic_score_s+ic_score_o).squeeze()
+        #print("Prachi Debug","image_compatibility_loss",image_compatibility_loss)
+        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg + self.image_compatibility_coefficient*image_compatibility_loss#(ic_score_s+ic_score_o)
 
         x = loss.item()
         rg = reg.item()
@@ -123,7 +165,7 @@ class Trainer(object):
         loss.backward()
         if(self.gradient_clip is not None):
             torch.nn.utils.clip_grad_norm(self.scoring_function.parameters(), self.gradient_clip)
-        self.optim.step()
+        self.optim.step()##check
         debug = ""
         if "post_epoch" in dir(self.scoring_function):
             debug = self.scoring_function.post_epoch()
@@ -192,8 +234,12 @@ class Trainer(object):
         start = time.time()
         losses = []
         count = 0
+        if self.model_name == 'image_model':
+            step_fn = self.step_aux
+        else:
+            step_fn = self.step
         for i in range(mb_start, steps):
-            l, reg, debug = self.step()
+            l, reg, debug = step_fn()
             losses.append(l)
             suffix = ("| Current Loss %8.4f | "%l) if len(losses) != batch_count[0] else "| Average Loss %8.4f | " % \
                                                                                          (numpy.mean(losses))

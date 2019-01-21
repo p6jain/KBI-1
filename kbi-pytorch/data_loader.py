@@ -37,9 +37,9 @@ class data_loader(object):
             no[:, 0] = len(self.kb.entity_map)-1
 
         s_image, o_image = (numpy.array([0]),numpy.array([0]))
-        if self.kb.entity_id_image_matrix:
-            s_image = entity_id_image_matrix[s]
-            o_image = entity_id_image_matrix[o]
+        if self.kb.entity_id_image_matrix.shape[0] > 1:
+            s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
+            o_image = numpy.array(self.kb.entity_id_image_matrix[o]).squeeze(1)
         return [s, r, o, ns, no, s_image, o_image]
 
     def sample_outside_type_range(self, type_exclude, negative_count):

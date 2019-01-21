@@ -21,7 +21,7 @@ if not has_cuda:
 def main(dataset_root, save_dir, model_name, model_arguments, loss_function, learning_rate, batch_size,
          regularization_coefficient, gradient_clip, optimizer_name, max_epochs, negative_sample_count, hooks,
          eval_every_x_mini_batches, eval_batch_size, resume_from_save, introduce_oov, verbose):
-    print("Prachi::", "with distance margin 0.0, distance dot like l2 ent type")#, ent reg")
+    #print("Prachi::", "with distance margin 0.0, distance dot like l2 ent type")#, ent reg")
 
     tpm = None
     if verbose>0:
@@ -59,10 +59,15 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         hooks = extra_utils.load_hooks(hooks, ktrain)
 
     if model_name == "image_model":
+        #print("Prachi Debug::","1")
         eim = extra_utils.fb15k_entity_image_map()
+        #print("Prachi Debug::","2")
         ktrain.augment_image_information(eim)
-        ktest.augment_image_information(eim)
-        kvalid.augment_image_information(eim)
+        #print("Prachi Debug::","3")
+        #ktest.augment_image_information(eim)
+        #print("Prachi Debug::","4")
+        #kvalid.augment_image_information(eim)
+        #print("Prachi Debug::","5")
 
     dltrain = data_loader.data_loader(ktrain, has_cuda)
     dlvalid = data_loader.data_loader(kvalid, has_cuda)
@@ -83,7 +88,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
-                         regularization_coefficient=regularization_coefficient, verbose=verbose,
+                         regularization_coefficient=regularization_coefficient, verbose=verbose, model_name=model_name,
                          image_compatibility = scoring_function.image_compatibility, image_compatibility_coefficient = 0.01)
     else:
         tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,

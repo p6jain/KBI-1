@@ -1,6 +1,9 @@
 import torch
 import utils
 import random
+import torchvision.models as torchvision_models
+import torch.nn as nn
+import torch.nn.functional as F
 
 class distmult(torch.nn.Module):
     """
@@ -219,7 +222,7 @@ class EncoderCNN(torch.nn.Module):
     def __init__(self, embed_size):
         """Load the pretrained ResNet-152 and replace top fc layer."""
         super(EncoderCNN, self).__init__()
-        resnet = models.resnet152(pretrained=True)
+        resnet = torchvision_models.resnet152(pretrained=True)
         modules = list(resnet.children())[:-1]      # delete the last fc layer.
         self.resnet = nn.Sequential(*modules)
         self.linear = nn.Linear(resnet.fc.in_features, embed_size)
@@ -227,6 +230,7 @@ class EncoderCNN(torch.nn.Module):
 
     def forward(self, images, flag_debug=0):
         """Extract feature vectors from input images."""
+        images = images.float() 
         with torch.no_grad():
             features = self.resnet(images)
         features = features.reshape(features.size(0), -1)
@@ -266,10 +270,14 @@ class image_model(torch.nn.Module):
         r_tt = self.R_tt(r)
         o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
         head_type_compatibility = (s_t*r_ht).sum(-1)
+        #print("Prachi Debug","s_t,r_ht", s_t.shape, r_ht.shape)
         tail_type_compatibility = (o_t*r_tt).sum(-1)
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+        
+        tmp = self.mult*base_forward*head_type_compatibility*tail_type_compatibility
+        #print("Prachi Debug","final type model score",tmp.shape)
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
 
     def regularizer(self, s, r, o):
@@ -288,19 +296,34 @@ class image_model(torch.nn.Module):
         need to write a seperate function for evaluation scores
         -- as we plan to prestore all entity's image embeddings
         '''
+        #print("Prachi Debug", s.shape, s_image.shape, o.shape, o_image.shape)
         s_t = self.E_t(s) #if s is not None else self.E_t.weight.unsqueeze(0)
         o_t = self.E_t(o) #if o is not None else self.E_t.weight.unsqueeze(0)
 
         s_image = self.image_model(s_image)
         o_image = self.image_model(o_image)
 
+        #print("Prachi Debug","s_image.shape",s_image.shape)
+        #print("Prachi Debug","s_t.shape",s_t.shape)
+        s_image.unsqueeze_(1)
+        o_image.unsqueeze_(1)
+        
+        #print("Prachi Debug","s_image.shape 2",s_image.shape)
+
         s_image_compatibility = (s_t * s_image).sum(-1)
         o_image_compatibility = (o_t * o_image).sum(-1)
+        #print("Prachi Debug","s_image_compatibility.shape",s_image_compatibility.shape)
         ##
         s_image_compatibility = torch.nn.Sigmoid()(self.psi*s_image_compatibility)
         o_image_compatibility = torch.nn.Sigmoid()(self.psi*o_image_compatibility)
+        #print("Prachi Debug","s_image_compatibility.shape", s_image_compatibility.shape)
+        
+        s_image_compatibility.squeeze()
+        o_image_compatibility.squeeze()
+    
+        #print("Prachi Debug","s_image_compatibility.shape 2", s_image_compatibility.shape) 
 
-        return s_image_compatibility, o_image_compatibility
+        return -(torch.mean(s_image_compatibility)), -(torch.mean(o_image_compatibility))
 
     def post_epoch(self):
         if(self.unit_reg):
