@@ -23,26 +23,32 @@ class kb(object):
         if filename is None:
             return
         facts = []
+
+        '''
+        tmp: removing facts with no image
+        '''
+        mid_image = open("data/fb15k/mid_image_path.txt").readlines()
+        mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])
+
         with open(filename) as f:
             lines = f.readlines()
             lines = [l.split() for l in lines]
 
-
             for l in lines:
-                if(add_unknowns):
-                    if(l[1] not in self.relation_map):
-                        self.reverse_relation_map[len(self.relation_map)] = l[1]
-                        self.relation_map[l[1]] = len(self.relation_map)
-                    if(l[0] not in self.entity_map):
-                        self.reverse_entity_map[len(self.entity_map)] = l[0]
-                        self.entity_map[l[0]] = len(self.entity_map)
-                    if(l[2] not in self.entity_map):
-                        self.reverse_entity_map[len(self.entity_map)] = l[2]
-                        self.entity_map[l[2]] = len(self.entity_map)
+                if l[0] in mid_image and l[2] in mid_image:
+                    if(add_unknowns):
+                        if(l[1] not in self.relation_map):
+                            self.reverse_relation_map[len(self.relation_map)] = l[1]
+                            self.relation_map[l[1]] = len(self.relation_map)
+                        if(l[0] not in self.entity_map):
+                            self.reverse_entity_map[len(self.entity_map)] = l[0]
+                            self.entity_map[l[0]] = len(self.entity_map)
+                        if(l[2] not in self.entity_map):
+                            self.reverse_entity_map[len(self.entity_map)] = l[2]
+                            self.entity_map[l[2]] = len(self.entity_map)
 
-
-                facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
-                        len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
+                    facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
+                            len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
         self.facts = numpy.array(facts, dtype='int64')
 
     def augment_image_information(self, mapping):

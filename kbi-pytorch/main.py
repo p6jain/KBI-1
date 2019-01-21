@@ -51,6 +51,9 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
                    add_unknowns=not introduce_oov)
 
     if(verbose > 0):
+        print("train size", ktrain.facts.shape)
+        print("test size", ktest.facts.shape)
+        print("valid size", kvalid.facts.shape)
         enm = extra_utils.fb15k_entity_name_map_fine()
         tnm = extra_utils.fb15k_type_name_map_fine()
         ktrain.augment_type_information(tpm,enm,tnm)
