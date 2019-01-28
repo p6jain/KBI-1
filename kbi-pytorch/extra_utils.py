@@ -8,6 +8,9 @@ import kb
 from PIL import Image
 from torchvision import transforms
 
+from pathlib import Path
+from ast import literal_eval
+
 def plot_weights(w, sne=False):
     w = w.cpu().numpy()
     if sne:
@@ -191,23 +194,48 @@ def load_hooks(hooks, kb):
         result.append(hook_class(**hook_param['arguments']))
     return result
 
+def check_exists(file_path):
+    my_file = Path(file_path)
+    return my_file.exists()
+
 def get_entity_relation_id_neg_sensitive(mapping):
+    em_path = "data/fb15k/image/entity_map.txt"
+    ter_path = "data/fb15k/image/type_entity_range.txt"
+    if check_exists(em_path) and check_exists(ter_path):
+        f_em=open(em_path).readlines()
+        f_ter=open(ter_path).readlines()
+        entity_map = {}; reverse_entity_map = {}; type_entity_range = {}
+        for ele in f_em:
+            ele = ele.strip("\n").split("\t")
+            entity_map[ele[0]] = int(ele[1])
+            reverse_entity_map[int(ele[1])] = ele[0]
+        for ele in f_ter:
+            ele = ele.strip("\n").split("\t")
+            type_entity_sets[int(ele[0])] = set(literal_eval(ele[1]))
+    else:
+        if mapping is None:
+            return None,None
+        type_entity_sets={}; entity_map={}; reverse_entity_map={}
+        for entity, entity_type in mapping.items():
+            if entity_type not in type_entity_sets:
+                type_entity_sets[entity_type]=set()
+            type_entity_sets[entity_type].add(entity)
 
-    if mapping is None:
-        return None,None
-    type_entity_sets={}; entity_map={}; reverse_entity_map={}
-    for entity, entity_type in mapping.items():
-        if entity_type not in type_entity_sets:
-            type_entity_sets[entity_type]=set()
-        type_entity_sets[entity_type].add(entity)
-
-    type_entity_range = {}
-    count=0
-    for typeid, typeset in type_entity_sets.items():
-        type_entity_range[typeid] = (count, count+len(typeset)-1)
-        for ent in typeset:
-            entity_map[ent] = count
-            reverse_entity_map[count] = ent
-            count+= 1
-    #print("DEBUG: ",entity_map, reverse_entity_map, type_entity_range)
+        type_entity_range = {}
+        count=0
+        for typeid, typeset in type_entity_sets.items():
+            type_entity_range[typeid] = (count, count+len(typeset)-1)
+            for ent in typeset:
+                entity_map[ent] = count
+                reverse_entity_map[count] = ent
+                count+= 1
+        #print("DEBUG: ",entity_map, reverse_entity_map, type_entity_range)
+        f_em=open("data/fb15k/image/entity_map.txt","w")
+        f_ter=open("data/fb15k/image/type_entity_range.txt","w")
+        for ele in type_entity_range:
+            f_ter.write(ele+"\t"+str(list(type_entity_range[ele]))+"\n")
+        f_ter.close()
+        for ele in entity_map:
+            f_em.write(ele+"\t"+str(entity_map[ele])+"\n")
+        f_em.close()
     return entity_map, reverse_entity_map, type_entity_range
