@@ -61,11 +61,9 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         kvalid.augment_type_information(tpm,enm,tnm)
         hooks = extra_utils.load_hooks(hooks, ktrain)
 
-    if model_name == "image_model":
-        #print("Prachi Debug::","1")
-        eim = extra_utils.fb15k_entity_image_map()
-        #print("Prachi Debug::","2")
-        ktrain.augment_image_information(eim)
+    #if model_name == "image_model":
+        #eim = extra_utils.fb15k_entity_image_map()
+        #ktrain.augment_image_information(eim)
         #print("Prachi Debug::","3")
         #ktest.augment_image_information(eim)
         #print("Prachi Debug::","4")
@@ -78,6 +76,9 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
 
     model_arguments['entity_count'] = len(ktrain.entity_map)
     model_arguments['relation_count'] = len(ktrain.relation_map)
+    if model_name == "image_model":
+        model_arguments['image_embedding'] = numpy.load("data/fb15k/image/image_embeddings_resnet152.dat")
+
     scoring_function = getattr(models, model_name)(**model_arguments)
     if has_cuda:
         scoring_function = scoring_function.cuda()

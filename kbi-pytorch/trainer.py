@@ -13,7 +13,7 @@ class Trainer(object):
                  hooks=None , eval_batch=100, negative_count=10, gradient_clip=None, regularization_coefficient=0.01,
                  save_dir="./logs", model_name = None, image_compatibility = None, image_compatibility_coefficient = 0.01):
         super(Trainer, self).__init__()
-        self.model_name = model_name        
+        self.model_name = model_name
 
         self.scoring_function = scoring_function
         self.loss = loss
@@ -148,7 +148,7 @@ class Trainer(object):
         else:
             reg = 0
 
-        ic_score_s, ic_score_o = self.image_compatibility(s, o, s_image, o_image)
+        ic_score_s, ic_score_o = self.image_compatibility(s, o)#, s_image, o_image)
 
         #print("Prachi Debug", "ic_score_s",ic_score_s.shape)
         #print("Prachi Debug", "reg", reg.shape, reg)
