@@ -27,6 +27,7 @@ class kb(object):
         '''
         tmp: removing facts with no image
         '''
+        print("removing facts with no image!!")
         mid_image = open("data/fb15k/mid_image_path.txt").readlines()
         mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])
 

@@ -211,7 +211,7 @@ def get_entity_relation_id_neg_sensitive(mapping):
             reverse_entity_map[int(ele[1])] = ele[0]
         for ele in f_ter:
             ele = ele.strip("\n").split("\t")
-            type_entity_sets[int(ele[0])] = set(literal_eval(ele[1]))
+            type_entity_range[int(ele[0])] = set(literal_eval(ele[1]))
     else:
         if mapping is None:
             return None,None
@@ -233,7 +233,7 @@ def get_entity_relation_id_neg_sensitive(mapping):
         f_em=open("data/fb15k/image/entity_map.txt","w")
         f_ter=open("data/fb15k/image/type_entity_range.txt","w")
         for ele in type_entity_range:
-            f_ter.write(ele+"\t"+str(list(type_entity_range[ele]))+"\n")
+            f_ter.write(str(ele)+"\t"+str(list(type_entity_range[ele]))+"\n")
         f_ter.close()
         for ele in entity_map:
             f_em.write(ele+"\t"+str(entity_map[ele])+"\n")

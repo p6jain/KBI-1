@@ -127,7 +127,8 @@ class Trainer(object):
         return x, rg, debug
 
     def step_aux(self):
-        s, r, o, ns, no, s_image, o_image = self.train.tensor_sample(self.batch_size, self.negative_count)
+        #s, r, o, ns, no, s_image, o_image = self.train.tensor_sample(self.batch_size, self.negative_count)
+        s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
         if flag>9600:
@@ -152,11 +153,12 @@ class Trainer(object):
 
         #print("Prachi Debug", "ic_score_s",ic_score_s.shape)
         #print("Prachi Debug", "reg", reg.shape, reg)
-        tmp=self.loss(fp, fns, fno)
+        #tmp=self.loss(fp, fns, fno)
         #print("Prachi Debug", "self.loss(fp, fns, fno)", tmp.shape, tmp)
 
         image_compatibility_loss = torch.mean(ic_score_s+ic_score_o).squeeze()
         #print("Prachi Debug","image_compatibility_loss",image_compatibility_loss)
+        #print("Prachi Debug::", self.image_compatibility_coefficient)
         loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg + self.image_compatibility_coefficient*image_compatibility_loss#(ic_score_s+ic_score_o)
 
         x = loss.item()

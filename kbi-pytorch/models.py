@@ -238,7 +238,7 @@ class EncoderCNN(torch.nn.Module):
         return features
 
 class image_model(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, image_embedding=None):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, image_compatibility_coefficient=0, image_embedding=None):
         super(image_model, self).__init__()
 
         base_model_class = globals()[base_model_name]
@@ -261,8 +261,14 @@ class image_model(torch.nn.Module):
         self.minimum_value = 0.0
 
         #image model
+        self.image_compatibility_coefficient = image_compatibility_coefficient
         #self.image_model = EncoderCNN(self.embedding_dim)
-        self.image_embedding = torch.from_numpy(image_embedding).to('cuda')
+        self.image_embedding = torch.nn.Embedding(self.entity_count-1,image_embedding.shape[-1]) #TO DO incluse OOV vec
+        self.image_embedding.weight.data.copy_(torch.from_numpy(image_embedding))
+        self.linear = nn.Linear(image_embedding.shape[-1], self.embedding_dim)
+        self.bn = nn.BatchNorm1d(self.embedding_dim, momentum=0.01)
+        image_embedding = None
+        #torch.from_numpy(image_embedding).to('cuda')
 
     def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
@@ -301,8 +307,10 @@ class image_model(torch.nn.Module):
         s_t = self.E_t(s) #if s is not None else self.E_t.weight.unsqueeze(0)
         o_t = self.E_t(o) #if o is not None else self.E_t.weight.unsqueeze(0)
 
-        s_image = self.image_embedding(s)
-        o_image = self.image_embedding(o)
+        tmp = self.linear(self.image_embedding(s));tmp = tmp.view(-1,self.embedding_dim)
+        s_image = self.bn(tmp)
+        tmp = self.linear(self.image_embedding(o));tmp = tmp.view(-1,self.embedding_dim)
+        o_image = self.bn(tmp)
 
         #print("Prachi Debug","s_image.shape",s_image.shape)
         #print("Prachi Debug","s_t.shape",s_t.shape)

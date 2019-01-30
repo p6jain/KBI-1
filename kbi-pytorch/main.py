@@ -10,6 +10,7 @@ import datetime
 import json
 import utils
 import extra_utils
+import numpy
 
 
 
@@ -93,7 +94,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
                          regularization_coefficient=regularization_coefficient, verbose=verbose, model_name=model_name,
-                         image_compatibility = scoring_function.image_compatibility, image_compatibility_coefficient = 0.01)
+                         image_compatibility = scoring_function.image_compatibility, image_compatibility_coefficient = scoring_function.image_compatibility_coefficient)#0.01)
     else:
         tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
