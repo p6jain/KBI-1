@@ -267,8 +267,8 @@ class image_model(torch.nn.Module):
         self.image_embedding.weight.data.copy_(torch.from_numpy(image_embedding))
         self.linear = nn.Linear(image_embedding.shape[-1], self.embedding_dim)
         self.bn = nn.BatchNorm1d(self.embedding_dim, momentum=0.01)
+
         image_embedding = None
-        #torch.from_numpy(image_embedding).to('cuda')
 
     def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
@@ -312,6 +312,9 @@ class image_model(torch.nn.Module):
         tmp = self.linear(self.image_embedding(o));tmp = tmp.view(-1,self.embedding_dim)
         o_image = self.bn(tmp)
 
+        #s_image = torch.nn.Sigmoid()(s_image_1)
+        #o_image = torch.nn.Sigmoid()(o_image_1)
+
         #print("Prachi Debug","s_image.shape",s_image.shape)
         #print("Prachi Debug","s_t.shape",s_t.shape)
         s_image.unsqueeze_(1)
@@ -319,12 +322,14 @@ class image_model(torch.nn.Module):
 
         #print("Prachi Debug","s_image.shape 2",s_image.shape)
 
+        #s_image_compatibility = (s_image * s_image).sum(-1)
         s_image_compatibility = (s_t * s_image).sum(-1)
+        #o_image_compatibility = (o_image * o_image).sum(-1)
         o_image_compatibility = (o_t * o_image).sum(-1)
         #print("Prachi Debug","s_image_compatibility.shape",s_image_compatibility.shape)
         ##
-        s_image_compatibility = torch.nn.Sigmoid()(self.psi*s_image_compatibility)
-        o_image_compatibility = torch.nn.Sigmoid()(self.psi*o_image_compatibility)
+        #s_image_compatibility = torch.nn.Sigmoid()(self.psi*s_image_compatibility)
+        #o_image_compatibility = torch.nn.Sigmoid()(self.psi*o_image_compatibility)
         #print("Prachi Debug","s_image_compatibility.shape", s_image_compatibility.shape)
 
         s_image_compatibility.squeeze()
@@ -339,6 +344,10 @@ class image_model(torch.nn.Module):
             self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
             self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
             self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
+            #test
+            #self.image_embedding.weight.data.div_(self.image_embedding.weight.data.norm(2, dim=-1, keepdim=True))
+            #test end
+
         return self.base_model.post_epoch()
 
 
