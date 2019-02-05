@@ -33,7 +33,7 @@ class Trainer(object):
         self.regularization_coefficient = regularization_coefficient
         self.save_directory = save_dir
         self.best_mrr_on_valid = {"valid_m":{"mrr":0.0}, "test_m":{"mrr":0.0},
-                                          "valid":{"mrr":0.0}, "test":{"mrr":0.0},
+                                          "valid_e2":{"mrr":0.0}, "test_e2":{"mrr":0.0},
                                           "valid_e1":{"mrr":0.0}, "test_e1":{"mrr":0.0}}#{"valid":{"mrr":0.0}}
         self.verbose = verbose
         self.hooks = hooks if hooks else []
@@ -208,11 +208,11 @@ class Trainer(object):
         try:
             if(state['valid_score_m']['mrr'] >= self.best_mrr_on_valid["valid_m"]["mrr"]):
                 print("Best Model details:\n","valid_m",str(state['valid_score_m']), "test_m",str(state["test_score_m"]),
-                                          "valid",str(state['valid_score_e2']), "test",str(state["test_score_e2"]),
+                                          "valid_e2",str(state['valid_score_e2']), "test_e2",str(state["test_score_e2"]),
                                           "valid_e1",str(state['valid_score_e1']),"test_e1",str(state["test_score_e1"]))
                 best_name = os.path.join(self.save_directory, "best_valid_model.pt")
                 self.best_mrr_on_valid = {"valid_m":state['valid_score_m'], "test_m":state["test_score_m"],
-                                          "valid":state['valid_score_e2'], "test":state["test_score_e2"],
+                                          "valid_e2":state['valid_score_e2'], "test_e2":state["test_score_e2"],
                                           "valid_e1":state['valid_score_e1'], "test_e1":state["test_score_e1"]}
 
                 if(os.path.exists(best_name)):
@@ -266,5 +266,5 @@ class Trainer(object):
                     self.save_state(i, valid_score, test_score)
         print()
         print("Ending")
-        print(self.best_mrr_on_valid["valid"])
-        print(self.best_mrr_on_valid["test"])
+        print(self.best_mrr_on_valid["valid_m"])
+        print(self.best_mrr_on_valid["test_m"])
