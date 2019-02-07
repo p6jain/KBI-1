@@ -23,20 +23,20 @@ class kb(object):
         if filename is None:
             return
         facts = []
-
+        
         '''
         tmp: removing facts with no image
-        '''
+        
         print("removing facts with no image!!")
         mid_image = open("data/fb15k/mid_image_path.txt").readlines()
         mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])
-
+        '''
         with open(filename) as f:
             lines = f.readlines()
             lines = [l.split() for l in lines]
 
             for l in lines:
-                if l[0] in mid_image and l[2] in mid_image:
+                if 1:#l[0] in mid_image and l[2] in mid_image:
                     if(add_unknowns):
                         if(l[1] not in self.relation_map):
                             self.reverse_relation_map[len(self.relation_map)] = l[1]

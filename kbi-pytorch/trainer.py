@@ -7,7 +7,6 @@ import kb
 import utils
 import os
 
-
 class Trainer(object):
     def __init__(self, scoring_function, regularizer, loss, optim, train, valid, test, verbose=0, batch_size=1000,
                  hooks=None , eval_batch=100, negative_count=10, gradient_clip=None, regularization_coefficient=0.01,
@@ -113,6 +112,62 @@ class Trainer(object):
             reg = 0
 
         loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
+
+        x = loss.item()
+        rg = reg.item()
+        self.optim.zero_grad()
+        loss.backward()
+        if(self.gradient_clip is not None):
+            torch.nn.utils.clip_grad_norm(self.scoring_function.parameters(), self.gradient_clip)
+        self.optim.step()
+        debug = ""
+        if "post_epoch" in dir(self.scoring_function):
+            debug = self.scoring_function.post_epoch()
+        return x, rg, debug
+
+
+
+    def step_icml(self):
+        s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+
+        flag = random.randint(1,10001)
+        if flag>9600:
+            flag_debug = 1
+        else:
+            flag_debug = 0
+        fp = self.scoring_function(s, r, o, flag_debug=flag_debug)
+        if flag_debug:
+            fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
+            fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+        else:
+            fns = self.scoring_function(ns, r, o, flag_debug=0)
+            fno = self.scoring_function(s, r, no, flag_debug=0)
+        if self.regularization_coefficient is not None:
+            reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
+        else:
+            reg = 0
+
+        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
+
+        num_relations = len(self.train.kb.relation_map)
+        r_rev = (r + num_relations)%(2*num_relations) 
+        s_rev, o_rev, ns_rev, no_rev = o, s, no, ns
+
+        fp_rev = self.scoring_function(s_rev, r_rev, o_rev, flag_debug=flag_debug)
+        if flag_debug:
+            fns_rev = self.scoring_function(ns_rev, r_rev, o_rev, flag_debug=flag_debug+1)
+            fno_rev = self.scoring_function(s_rev, r_rev, no_rev, flag_debug=flag_debug+1)
+        else:
+            fns_rev = self.scoring_function(ns_rev, r_rev, o_rev, flag_debug=0)
+            fno_rev = self.scoring_function(s_rev, r_rev, no_rev, flag_debug=0)
+        if self.regularization_coefficient is not None:
+            reg_rev = self.regularizer(s_rev, r_rev, o_rev) + self.regularizer(ns_rev, r_rev, o_rev) + self.regularizer(s_rev, r_rev, no_rev)
+            reg_rev = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
+        else:
+            reg_rev = 0
+    
+        loss += self.loss(fp_rev, fns_rev, fno_rev) + self.regularization_coefficient*reg_rev
 
         x = loss.item()
         rg = reg.item()
@@ -237,9 +292,11 @@ class Trainer(object):
     def start(self, steps=50, batch_count=(20, 10), mb_start=0):
         start = time.time()
         losses = []
-        count = 0
+        count = 0;
         if self.model_name == 'image_model':
             step_fn = self.step_aux
+        elif self.train.flag_add_reverse:
+            step_fn = self.step_icml
         else:
             step_fn = self.step
         for i in range(mb_start, steps):
