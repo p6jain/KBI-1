@@ -133,11 +133,11 @@ class complex(torch.nn.Module):
         r_re = self.R_re(r)
         o_re = self.E_re(o)
         #print("s.shape,o.shape,r.shape ",s.shape,o.shape,r.shape,s.shape[-1],o.shape[-1],r.shape[-1])
-        #return (s_re*s_re+o_re*o_re+r_re*r_re+s_im*s_im+r_im*r_im+o_im*o_im).sum()
+        return (s_re*s_re+o_re*o_re+r_re*r_re+s_im*s_im+r_im*r_im+o_im*o_im).sum()
         #denom_s = r.shape[0] * self.embedding_dim * s.shape[-1]
         #denom_o = r.shape[0] * self.embedding_dim * o.shape[-1]
         #return ((s_re*s_re).sum()+(s_im*s_im).sum())/(2.0*denom_s)+((o_im*o_im).sum()+(o_re*o_re).sum())/(2.0*denom_o)+(r_re*r_re).mean()/3.0+(r_im*r_im).mean()/3.0
-        return ((s_re*s_re).mean()+(s_im*s_im).mean()+(o_im*o_im).mean()+(o_re*o_re).mean())/(2.0)+((r_re*r_re).mean()+(r_im*r_im).mean())/4.0
+        #return ((s_re*s_re).mean()+(s_im*s_im).mean()+(o_im*o_im).mean()+(o_re*o_re).mean())/(2.0)+((r_re*r_re).mean()+(r_im*r_im).mean())/4.0
 
     def post_epoch(self):
         return ""
