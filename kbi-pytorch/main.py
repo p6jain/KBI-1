@@ -11,7 +11,7 @@ import json
 import utils
 import extra_utils
 import numpy
-
+import re
 
 
 has_cuda = torch.cuda.is_available()
@@ -23,6 +23,13 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
          regularization_coefficient, gradient_clip, optimizer_name, max_epochs, negative_sample_count, hooks,
          eval_every_x_mini_batches, eval_batch_size, resume_from_save, introduce_oov, verbose):
     #print("Prachi::", "with distance margin 0.0, distance dot like l2 ent type")#, ent reg")
+
+    if re.search("_icml", model_name):
+        flag_add_reverse = 1
+    else:
+        flag_add_reverse = 0
+
+    model_name = model_name.split("_icml")[0]
 
     tpm = None
     if verbose>0:
@@ -71,12 +78,15 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         #kvalid.augment_image_information(eim)
         #print("Prachi Debug::","5")
 
-    dltrain = data_loader.data_loader(ktrain, has_cuda)
-    dlvalid = data_loader.data_loader(kvalid, has_cuda)
-    dltest = data_loader.data_loader(ktest, has_cuda)
+    dltrain = data_loader.data_loader(ktrain, has_cuda, flag_add_reverse=flag_add_reverse)
+    dlvalid = data_loader.data_loader(kvalid, has_cuda, flag_add_reverse=flag_add_reverse)
+    dltest = data_loader.data_loader(ktest, has_cuda, flag_add_reverse=flag_add_reverse)
 
     model_arguments['entity_count'] = len(ktrain.entity_map)
-    model_arguments['relation_count'] = len(ktrain.relation_map)
+    if flag_add_reverse:
+        model_arguments['relation_count'] = len(ktrain.relation_map)*2
+    else:
+        model_arguments['relation_count'] = len(ktrain.relation_map)
     if model_name == "image_model":
         model_arguments['image_embedding'] = numpy.load("data/fb15k/image/image_embeddings_resnet152.dat")
 

@@ -2,12 +2,11 @@ import numpy
 import torch
 import torch.autograd
 
-
 class data_loader(object):
     """
     Does th job of batching a knowledge base and also generates negative samples with it.
     """
-    def __init__(self, kb, load_to_gpu, first_zero=True):
+    def __init__(self, kb, load_to_gpu, first_zero=True, flag_add_reverse=None):
         """
         Duh..\n
         :param kb: the knowledge base to batch
@@ -17,6 +16,7 @@ class data_loader(object):
         self.kb = kb
         self.load_to_gpu = load_to_gpu
         self.first_zero = first_zero
+        self.flag_add_reverse = flag_add_reverse
 
     def sample(self, batch_size=1000, negative_count=10):
         """
@@ -35,6 +35,42 @@ class data_loader(object):
         if self.first_zero:
             ns[:, 0] = len(self.kb.entity_map)-1
             no[:, 0] = len(self.kb.entity_map)-1
+        if 0:#self.kb.entity_id_image_matrix.shape[0] > 1:
+            s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
+            o_image = numpy.array(self.kb.entity_id_image_matrix[o]).squeeze(1)
+            return [s, r, o, ns, no, s_image, o_image]
+        else:
+            return [s, r, o, ns, no]
+
+    def sample_icml(self, batch_size=1000, negative_count=10):
+        """
+        Generates a random sample from kb and returns them as numpy arrays.\n
+        :param batch_size: The number of facts in the batch or the size of batch.
+        :param negative_count: The number of negative samples for each positive fact.
+        :return: A list containing s, r, o and negative s and negative o of the batch
+        """
+        indexes = numpy.random.randint(0, self.kb.facts.shape[0]*2 , batch_size)
+        indexes = indexes.reshape((indexes.shape[0],-1))
+        check = indexes > (self.kb.facts.shape[0] - 1); check.astype('int');
+        check=check.reshape((check.shape[0],-1))
+        new_indexes = indexes - (check * self.kb.facts.shape[0])
+        new_indexes = new_indexes.reshape((new_indexes.shape[0],))
+        facts = self.kb.facts[new_indexes]
+
+        s_tmp = numpy.expand_dims(facts[:, 0], -1)
+        r_tmp = numpy.expand_dims(facts[:, 1], -1)
+        o_tmp = numpy.expand_dims(facts[:, 2], -1)
+
+        num_relations = len(self.kb.relation_map)
+        tmp_r_change = check*num_relations
+        r = r_tmp + check * (num_relations) 
+        s, o = numpy.where(check, (o_tmp, s_tmp), (s_tmp, o_tmp))        
+
+        ns = numpy.random.randint(0, len(self.kb.entity_map), (batch_size, negative_count))
+        no = numpy.random.randint(0, len(self.kb.entity_map), (batch_size, negative_count))
+        if self.first_zero:
+            ns[:, 0] = len(self.kb.entity_map)-1
+            no[:, 0] = len(self.kb.entity_map)-1
 
         if 0:#self.kb.entity_id_image_matrix.shape[0] > 1:
             s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
@@ -42,6 +78,7 @@ class data_loader(object):
             return [s, r, o, ns, no, s_image, o_image]
         else:
             return [s, r, o, ns, no]
+
 
     def sample_outside_type_range(self, type_exclude, negative_count):
         start, end = self.kb.type_entity_range[type_exclude] #
@@ -104,7 +141,10 @@ class data_loader(object):
         :return: A list containing s, r, o and negative s and negative o of the batch
         """
         # ls = self.sample_neg_sensitive(batch_size, negative_count)
-        ls = self.sample(batch_size, negative_count)
+        if self.flag_add_reverse:
+            ls = self.sample_icml(batch_size, negative_count)
+        else:
+            ls = self.sample(batch_size, negative_count)
         if self.load_to_gpu:
             return [torch.autograd.Variable(torch.from_numpy(x).cuda()) for x in ls]
         else:

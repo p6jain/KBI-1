@@ -70,83 +70,12 @@ class ranker(object):
         :return: rank of o, score of each entity and score of the gold o
         """
         if flag_s_o:
-            #"""
             scores = self.scoring_function(s, r, None).data
             score_of_expected = scores.gather(1, o.data)
-            # scores.scatter_(1, s.data, self.scoring_function.minimum_value) #disallow (e,r,e)
-            #"""
-            """
-            ####2-step ranking
-            scores, base, head, tail  = self.scoring_function(s, r, None)
-
-            scores = scores.data
-            base = base.data
-            head = head.data
-            tail = tail.data
-            
-            score_of_expected = scores.gather(1, o.data)
-            scores.scatter_(1, s.data, self.scoring_function.minimum_value)
-
-            tail.scatter_(1, s.data, self.scoring_function.minimum_value)
-            base.scatter_(1, s.data, self.scoring_function.minimum_value)
-            
-            base_exp = base.gather(1, o.data)
-            # head_exp = head.gather(1, o.data)
-            tail_exp = tail.gather(1, o.data)
-
-            tail.scatter_(1, knowns, self.scoring_function.minimum_value)
-
-            type_exp = tail_exp
-            type_tot = tail
-            """
-
         else:
-            #"""
             scores = self.scoring_function(None, r, o).data
             score_of_expected = scores.gather(1, s.data)
-            # scores.scatter_(1, o.data, self.scoring_function.minimum_value) #disallow (e,r,e)
-            #"""
-            """
-            #### 2-step ranking
-            scores, base, head, tail  = self.scoring_function(None, r, o)
 
-            scores = scores.data
-            base = base.data
-            head = head.data
-            tail = tail.data
-            
-            score_of_expected = scores.gather(1, o.data)
-            scores.scatter_(1, s.data, self.scoring_function.minimum_value)
-
-            head.scatter_(1, o.data, self.scoring_function.minimum_value)
-            base.scatter_(1, o.data, self.scoring_function.minimum_value)
-            
-            base_exp = base.gather(1, s.data)
-            head_exp = head.gather(1, s.data)
-            # tail_exp = tail.gather(1, s.data)
-
-            head.scatter_(1, knowns, self.scoring_function.minimum_value)
-
-            type_exp = head_exp
-            type_tot = head
-            """
-
-        """
-        scores.scatter_(1, knowns, self.scoring_function.minimum_value)
-        base.scatter_(1, knowns, self.scoring_function.minimum_value)
-        type_exp = torch.round(type_exp*5.0)
-        type_class = torch.round(type_tot*5.0)
-        greater = type_class.gt(type_exp).float()
-        rank = greater.sum(dim=1)
-
-        out_of_class = type_class.eq(type_exp).float()
-        base = base*out_of_class
-        greater_base = base.gt(base_exp).float()
-        eq_base = base.eq(base_exp).float()
-        rank = rank + greater_base.sum(dim=1) + 1 + eq_base.sum(dim=1)/2.0
-        return rank, scores, score_of_expected, base, base_exp
-        """
-        
         #"""
         scores.scatter_(1, knowns, self.scoring_function.minimum_value)
         greater = scores.ge(score_of_expected).float()
@@ -258,6 +187,25 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
             for hook in hooks:
                 hook(s.data, r.data, o.data, ranks_o, top_scores_o, top_predictions_o, expected_type_o, top_predictions_type_o)
 
+
+            #with open("analysis_r_e1e2_e1Type_e2Type_e1Predictede2Predicted_e1PredictedType_e2PredictedType.csv","w") as f:    
+            with open("analysis_r_e1e2_e1Predictede2Predicted_e1Ranke2Rank.csv","a") as f:
+                #writer = csv.writer(f, delimiter='\t')
+                #print(r.data.shape,s.data.shape,o.data.shape,top_predictions_s.data.shape,top_predictions_o.data.shape)
+                #print("ready")
+                #print("r",r.data.cpu().numpy())
+                #print("s",s.data.cpu().numpy())
+                #print("o",o.data.cpu().numpy()[:,0])
+                #print("top_predictions_o",top_predictions_o.data.cpu().numpy())
+                #print("top_predictions_s",top_predictions_s.data.cpu().numpy()[:,0])
+                #print("ranks_s",ranks_s.data.cpu().numpy().shape);
+                #print("ranks_s",ranks_s.data.cpu().numpy()[:]);exit()
+                for r_w,s_w,o_w,ts_w,to_w, r_s_w, r_o_w in zip(r.data.cpu().numpy()[:,0],s.data.cpu().numpy()[:,0],o.data.cpu().numpy()[:,0],top_predictions_s.data.cpu().numpy()[:,0],top_predictions_o.data.cpu().numpy()[:,0],ranks_s.data.cpu().numpy()[:],ranks_o.data.cpu().numpy()[:]):
+                    #print("##",[r_w,s_w,o_w,ts_w,to_w])
+                    f.write(("\t").join([str(ele) for ele in [r_w,s_w,o_w,ts_w,to_w,r_s_w, r_o_w]])+"\n")
+                f.flush()
+                f.close();
+
         utils.print_progress_bar(end, facts.shape[0], "Eval on %s" % name, (("|M| mrr:%3.2f|h10:%3.2f%"
                                                                                   "%|h1:%3.2f|e1| mrr:%3.2f|h10:%3.2f%"
                                                                                   "%|h1:%3.2f|e2| mrr:%3.2f|h10:%3.2f%"
@@ -317,7 +265,6 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
         writer.writerows([relation_subject_type_total.keys(), relation_subject_type_total.values(), relation_subject_type_correct.keys(), relation_subject_type_correct.values(), relation_object_type_total.keys(), relation_object_type_total.values(), relation_object_type_correct.keys(), relation_object_type_correct.values()])
     """
 
-    
     gc.collect()
     torch.cuda.empty_cache()
     for hook in hooks:
