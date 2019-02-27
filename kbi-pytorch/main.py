@@ -1,3 +1,7 @@
+'''
+time CUDA_VISIBLE_DEVICES=0 python3 main.py -d fb15k -m image_model -a '{"embedding_dim":19, "base_model_name":"complex", "base_model_arguments":{"embedding_dim":180}, "image_compatibility_coefficient":1}' -l softmax_loss -r 0.5 -g 0.30 -b 4500 -x 2000 -n 200 -v 1 -y 25 -e 500 -q 1
+'''
+
 import kb
 import data_loader
 import trainer
@@ -34,7 +38,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     tpm = None
     if verbose>0:
         utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")
-        tpm = extra_utils.fb15k_type_map_fine()
+        tpm = extra_utils.type_map_fine(dataset_root)
 
     if resume_from_save:
         saved_model = torch.load(resume_from_save)
@@ -47,7 +51,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
                 reverse_entity_map[v] = k
 
     else:
-        entity_map, reverse_entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm)
+        entity_map, reverse_entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm, dataset_root)
 
     ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range, rem=reverse_entity_map)
 
@@ -62,8 +66,8 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         print("train size", ktrain.facts.shape)
         print("test size", ktest.facts.shape)
         print("valid size", kvalid.facts.shape)
-        enm = extra_utils.fb15k_entity_name_map_fine()
-        tnm = extra_utils.fb15k_type_name_map_fine()
+        enm = extra_utils.entity_name_map_fine(dataset_root)
+        tnm = extra_utils.type_name_map_fine(dataset_root)
         ktrain.augment_type_information(tpm,enm,tnm)
         ktest.augment_type_information(tpm,enm,tnm)
         kvalid.augment_type_information(tpm,enm,tnm)
@@ -88,7 +92,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     else:
         model_arguments['relation_count'] = len(ktrain.relation_map)
     if model_name == "image_model":
-        model_arguments['image_embedding'] = numpy.load("data/fb15k/image/image_embeddings_resnet152.dat")
+        model_arguments['image_embedding'] = numpy.load(dataset_root+"/image/image_embeddings_resnet152.dat")
 
     scoring_function = getattr(models, model_name)(**model_arguments)
     if has_cuda:

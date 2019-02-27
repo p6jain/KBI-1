@@ -103,8 +103,8 @@ def plt(tw, w, td, entity_type_map):
     matplotlib.pyplot.show()
 
 
-def fb15k_type_map_fine():
-    fl = open("data/fb15k/entity_mid_name_type_typeid.txt").readlines()
+def type_map_fine(dataset_root):
+    fl = open(dataset_root+"/entity_mid_name_type_typeid.txt").readlines()
     fl = [x.strip().split('\t') for x in fl]
     result = {}
     for line in fl:
@@ -138,16 +138,16 @@ def fb15k_entity_image_map():
         mid_image_map[line[0]] = load_image(path_to_image_folder+line[1])
     return mid_image_map
 
-def fb15k_entity_name_map_fine():
-    fl = open("data/fb15k/entity_mid_name_type_typeid.txt").readlines()
+def entity_name_map_fine(dataset_root):
+    fl = open(dataset_root+"/entity_mid_name_type_typeid.txt").readlines()
     fl = [x.strip().split('\t') for x in fl]
     result = {}
     for line in fl:
         result[line[0]] = line[1]
     return result
 
-def fb15k_type_name_map_fine():
-    fl = open("data/fb15k/entity_mid_name_type_typeid.txt").readlines()
+def type_name_map_fine(dataset_root):
+    fl = open(dataset_root+"/entity_mid_name_type_typeid.txt").readlines()
     fl = [x.strip().split('\t') for x in fl]
     result = {}
     for line in fl:
@@ -198,9 +198,9 @@ def check_exists(file_path):
     my_file = Path(file_path)
     return my_file.exists()
 
-def get_entity_relation_id_neg_sensitive(mapping):
-    em_path = "data/fb15k/image/entity_map.txt"
-    ter_path = "data/fb15k/image/type_entity_range.txt"
+def get_entity_relation_id_neg_sensitive(mapping,dataset_root):
+    em_path = dataset_root+"/image/entity_map.txt"
+    ter_path = dataset_root+"/image/type_entity_range.txt"
     if check_exists(em_path) and check_exists(ter_path):
         f_em=open(em_path).readlines()
         f_ter=open(ter_path).readlines()
@@ -230,8 +230,8 @@ def get_entity_relation_id_neg_sensitive(mapping):
                 reverse_entity_map[count] = ent
                 count+= 1
         #print("DEBUG: ",entity_map, reverse_entity_map, type_entity_range)
-        f_em=open("data/fb15k/image/entity_map.txt","w")
-        f_ter=open("data/fb15k/image/type_entity_range.txt","w")
+        f_em=open(dataset_root+"/image/entity_map.txt","w")
+        f_ter=open(dataset_root+"/image/type_entity_range.txt","w")
         for ele in type_entity_range:
             f_ter.write(str(ele)+"\t"+str(list(type_entity_range[ele]))+"\n")
         f_ter.close()

@@ -209,13 +209,16 @@ class Trainer(object):
 
         #print("Prachi Debug", "ic_score_s",ic_score_s.shape)
         #print("Prachi Debug", "reg", reg.shape, reg)
-        CGREEN  = '\33[32m';CRED = '\033[91m';CVIOLET = '\33[35m'
-        CEND = '\033[0m'
-        tmp=self.loss(fp, fns, fno)
-        print("Prachi Debug", "self.loss(fp, fns, fno)", tmp.shape, CGREEN, tmp, CEND)
-        print("Prachi Debug","ic_score_s","ic_score_o",CRED, ic_score_s,ic_score_o,CEND)
+        verbose_debug = random.randint(1,10001)
+        if verbose_debug > 9999:
+            CGREEN  = '\33[32m';CRED = '\033[91m';CVIOLET = '\33[35m'
+            CEND = '\033[0m'
+            tmp=self.loss(fp, fns, fno)
+            print("Prachi Debug", "self.loss(fp, fns, fno)", tmp.shape, CGREEN, tmp, CEND)
+            print("Prachi Debug","ic_score_s","ic_score_o",CRED, ic_score_s,ic_score_o,CEND)
         image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o))).squeeze()
-        print("Prachi Debug","image_compatibility_loss",image_compatibility_loss.shape,CVIOLET,image_compatibility_loss, CEND)
+        if verbose_debug > 9999:
+            print("Prachi Debug","image_compatibility_loss",image_compatibility_loss.shape,CVIOLET,image_compatibility_loss, CEND)
         #print("Prachi Debug::", self.image_compatibility_coefficient)
         loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg + self.image_compatibility_coefficient*image_compatibility_loss#(ic_score_s+ic_score_o)
 
