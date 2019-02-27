@@ -1,5 +1,6 @@
 import numpy
 import torch
+import re
 
 class kb(object):
     """
@@ -26,17 +27,20 @@ class kb(object):
         
         '''
         tmp: removing facts with no image
-        
-        print("removing facts with no image!!")
-        mid_image = open("data/fb15k/mid_image_path.txt").readlines()
-        mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])
         '''
+        mid_image = set([]);flag_image = 1
+        if 1:
+            print("removing facts with no image!!")
+            mid_image = open("data/fb15k/mid_image_path.txt").readlines()
+            mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])
+            flag_image = 0
+
         with open(filename) as f:
             lines = f.readlines()
             lines = [l.split() for l in lines]
 
             for l in lines:
-                if 1:#l[0] in mid_image and l[2] in mid_image:
+                if flag_image or (l[0] in mid_image and l[2] in mid_image):
                     if(add_unknowns):
                         if(l[1] not in self.relation_map):
                             self.reverse_relation_map[len(self.relation_map)] = l[1]

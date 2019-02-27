@@ -1,5 +1,11 @@
 '''
 time CUDA_VISIBLE_DEVICES=1 python3 mukund_exp_get_pretrained_scores.py -d fb15k -m image_model -a '{"embedding_dim":19, "base_model_name":"complex", "base_model_arguments":{"embedding_dim":180}, "image_compatibility_coefficient":1}' -b 6500 -n 200 -v 1 -q 1 -f best_valid_model.pt 
+
+x='-d fb15k -m image_model -a -b 6500 -n 200 -v 1 -q 1 -f best_valid_model.pt';L=x.split(" ")
+L = L[:5] + ['{"embedding_dim":19, "base_model_name":"complex", "base_model_arguments":{"embedding_dim":180}, "image_compatibility_coefficient":1}']+L[5:]
+import sys
+sys.argv += L
+
 '''
 
 import kb
@@ -49,6 +55,9 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
                    add_unknowns=not introduce_oov)
 
     if(verbose > 0):
+        print("train size", ktrain.facts.shape)
+        print("test size", ktest.facts.shape)
+        print("valid size", kvalid.facts.shape)
         utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")
         tpm = extra_utils.fb15k_type_map_fine()#dataset_root)
         enm = extra_utils.fb15k_entity_name_map_fine()#dataset_root)
@@ -96,17 +105,17 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
     
     valid_score = evaluate.evaluate("valid", ranker, dlvalid.kb, eval_batch_size,
                                     verbose=verbose, hooks=hooks)
-    test_score = evaluate.evaluate("test ", ranker, dltest.kb, eval_batch_size,
-                                   verbose=verbose, hooks=hooks)
+#    test_score = evaluate.evaluate("test ", ranker, dltest.kb, eval_batch_size,
+                                   #verbose=verbose, hooks=hooks)
     valid_score["correct_type"]["e1"] = 100.0 - (100.0* valid_score["correct_type"]["e1"] / dlvalid.kb.facts.shape[0])
-    test_score["correct_type"]["e1"] = 100.0 - (100.0* test_score["correct_type"]["e1"] / dltest.kb.facts.shape[0])
+#    test_score["correct_type"]["e1"] = 100.0 - (100.0* test_score["correct_type"]["e1"] / dltest.kb.facts.shape[0])
     valid_score["correct_type"]["e2"] = 100.0 - (100.0* valid_score["correct_type"]["e2"] / dlvalid.kb.facts.shape[0])
-    test_score["correct_type"]["e2"] = 100.0 - (100.0* test_score["correct_type"]["e2"] / dltest.kb.facts.shape[0])
+#    test_score["correct_type"]["e2"] = 100.0 - (100.0* test_score["correct_type"]["e2"] / dltest.kb.facts.shape[0])
 
     print("Valid")
     pprint.pprint(valid_score)
-    print("Test")
-    pprint.pprint(test_score)
+#    print("Test")
+#    pprint.pprint(test_score)
     """
     with open("generated/fb15k_rel_sigmoid.csv",'r') as f:
         reader = csv.reader(f)
