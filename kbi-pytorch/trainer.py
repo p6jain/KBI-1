@@ -106,9 +106,9 @@ class Trainer(object):
             fns = self.scoring_function(ns, r, o, flag_debug=0)
             fno = self.scoring_function(s, r, no, flag_debug=0)
         if self.regularization_coefficient is not None:
-            #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
-            #reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
-            reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no) + self.regularizer(ns, r, no)
+            reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
+            #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no) + self.regularizer(ns, r, no)
         else:
             reg = 0
 
