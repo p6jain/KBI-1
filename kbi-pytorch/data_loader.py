@@ -30,15 +30,21 @@ class data_loader(object):
         s = numpy.expand_dims(facts[:, 0], -1)
         r = numpy.expand_dims(facts[:, 1], -1)
         o = numpy.expand_dims(facts[:, 2], -1)
+
         ns = numpy.random.randint(0, len(self.kb.entity_map), (batch_size, negative_count))
         no = numpy.random.randint(0, len(self.kb.entity_map), (batch_size, negative_count))
         if self.first_zero:
             ns[:, 0] = len(self.kb.entity_map)-1
             no[:, 0] = len(self.kb.entity_map)-1
-        if 0:#self.kb.entity_id_image_matrix.shape[0] > 1:
-            s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
-            o_image = numpy.array(self.kb.entity_id_image_matrix[o]).squeeze(1)
-            return [s, r, o, ns, no, s_image, o_image]
+        if self.kb.use_image:
+            #s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
+            #o_image = numpy.array(self.kb.entity_id_image_matrix[o]).squeeze(1)
+            #return [s, r, o, ns, no, s_image, o_image]
+            s_oov = numpy.expand_dims(facts[:, 3], -1)
+            o_oov = numpy.expand_dims(facts[:, 4], -1)
+            s_oov = s_oov.astype(float)
+            o_oov = o_oov.astype(float)
+            return [s, r, o, ns, no, s_oov, o_oov]
         else:
             return [s, r, o, ns, no]
 

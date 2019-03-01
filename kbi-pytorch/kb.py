@@ -7,7 +7,7 @@ class kb(object):
     Stores a knowledge base as an numpy array. Can be generated from a file. Also stores the entity/relation mappings
     (which is the mapping from entity names to entity id) and possibly entity type information.
     """
-    def __init__(self, filename, em=None, rm=None, type_entity_range=None, rem=None, rrm=None, add_unknowns=True):
+    def __init__(self, filename, em=None, rm=None, type_entity_range=None, rem=None, rrm=None, add_unknowns=True, use_image=0):
         """
         Duh...
         :param filename: The file name to read the kb from
@@ -21,6 +21,7 @@ class kb(object):
         self.reverse_entity_map = {} if rem is None else rem
         self.reverse_relation_map = {} if rrm is None else rrm
         self.entity_id_image_matrix = numpy.array([0])
+        self.use_image = use_image
         if filename is None:
             return
         facts = []
@@ -30,8 +31,9 @@ class kb(object):
         '''
         mid_image = set([]);flag_image = 1
         dataset_root = ("/").join(filename.split("/")[:-1])
-        if 1:
-            print("removing facts with no image!!")
+        if self.use_image:
+            print("using images")
+            #print("removing facts with no image!!")
             mid_image = open(dataset_root+"/mid_image_path.txt").readlines()
             mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])
             flag_image = 0
@@ -42,7 +44,7 @@ class kb(object):
             lines = [l.split() for l in lines]
 
             for l in lines:
-                if flag_image or (l[0] in mid_image and l[2] in mid_image):
+                if 1:##flag_image or (l[0] in mid_image and l[2] in mid_image):
                     if(add_unknowns):
                         if(l[1] not in self.relation_map):
                             self.reverse_relation_map[len(self.relation_map)] = l[1]
@@ -53,9 +55,26 @@ class kb(object):
                         if(l[2] not in self.entity_map):
                             self.reverse_entity_map[len(self.entity_map)] = l[2]
                             self.entity_map[l[2]] = len(self.entity_map)
-
+                #only for all facts
+                if self.use_image:
+                    L=[]
+                    if (l[0] in mid_image):
+                        L.append(1.0)
+                    else:
+                        L.append(0.0)
+                    if (l[2] in mid_image):
+                        L.append(1.0)
+                    else:
+                        L.append(0.0)
+                   
+                    #if L[0]+L[1] < 2:
+                    #    print("removing facts with no image!!");continue 
                     facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
-                            len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
+                                len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)]+L)
+                else:
+                    facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
+                                len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
+                #
         self.facts = numpy.array(facts, dtype='int64')
 
     def augment_image_information(self, mapping):
