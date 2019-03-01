@@ -91,7 +91,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         model_arguments['relation_count'] = len(ktrain.relation_map)*2
     else:
         model_arguments['relation_count'] = len(ktrain.relation_map)
-    if model_name == "image_model":
+    if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model":
         model_arguments['image_embedding'] = numpy.load(dataset_root+"/image/image_embeddings_resnet152.dat")
 
     scoring_function = getattr(models, model_name)(**model_arguments)

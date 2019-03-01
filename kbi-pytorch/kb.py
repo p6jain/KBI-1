@@ -30,7 +30,7 @@ class kb(object):
         '''
         mid_image = set([]);flag_image = 1
         dataset_root = ("/").join(filename.split("/")[:-1])
-        if 0:
+        if 1:
             print("removing facts with no image!!")
             mid_image = open(dataset_root+"/mid_image_path.txt").readlines()
             mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])

@@ -205,7 +205,9 @@ class Trainer(object):
         else:
             reg = 0
 
-        ic_score_s, ic_score_o = self.image_compatibility(s, o)#, s_image, o_image)
+        #ic_score_s, ic_score_o ,tmp_ic_score_s_r, tmp_ic_score_s_o= self.image_compatibility(s,r, o)#, s_image, o_image)
+        ic_score_s, ic_score_o = self.image_compatibility(s,r, o)#, s_image, o_image)
+
 
         #print("Prachi Debug", "ic_score_s",ic_score_s.shape)
         #print("Prachi Debug", "reg", reg.shape, reg)
@@ -217,6 +219,7 @@ class Trainer(object):
             print("Prachi Debug", "self.loss(fp, fns, fno)", tmp.shape, CGREEN, tmp, CEND)
             print("Prachi Debug","ic_score_s","ic_score_o",CRED, ic_score_s,ic_score_o,CEND)
         image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o))).squeeze()
+        #image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o,tmp_ic_score_s_r, tmp_ic_score_s_o))).squeeze()
         if verbose_debug > 9999:
             print("Prachi Debug","image_compatibility_loss",image_compatibility_loss.shape,CVIOLET,image_compatibility_loss, CEND)
         #print("Prachi Debug::", self.image_compatibility_coefficient)
