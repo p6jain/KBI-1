@@ -35,6 +35,10 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
 
     model_name = model_name.split("_icml")[0]
 
+    flag_image = 0
+    if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model" or model_name == "typed_image_model_reg":
+        flag_image = 1
+
     tpm = None
     if verbose>0:
         utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")
@@ -53,14 +57,14 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     else:
         entity_map, reverse_entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm, dataset_root)
 
-    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range, rem=reverse_entity_map)
+    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range, rem=reverse_entity_map, use_image=flag_image)
 
     if introduce_oov:
         ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
     ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
-                  add_unknowns=not introduce_oov)
+                  add_unknowns=not introduce_oov, use_image = flag_image)
     kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
-                   add_unknowns=not introduce_oov)
+                   add_unknowns=not introduce_oov, use_image = flag_image)
 
     if(verbose > 0):
         print("train size", ktrain.facts.shape)
@@ -91,7 +95,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         model_arguments['relation_count'] = len(ktrain.relation_map)*2
     else:
         model_arguments['relation_count'] = len(ktrain.relation_map)
-    if model_name == "image_model":
+    if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model" or model_name =="typed_image_model_reg":
         model_arguments['image_embedding'] = numpy.load(dataset_root+"/image/image_embeddings_resnet152.dat")
 
     scoring_function = getattr(models, model_name)(**model_arguments)
@@ -103,7 +107,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     if(not eval_batch_size):
         eval_batch_size = max(50, batch_size*2*negative_sample_count//len(ktrain.entity_map))
 
-    if model_name == "image_model":
+    if model_name == "image_model" or model_name == "typed_image_model_reg":
         tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,

@@ -184,7 +184,8 @@ class Trainer(object):
 
     def step_aux(self):
         #s, r, o, ns, no, s_image, o_image = self.train.tensor_sample(self.batch_size, self.negative_count)
-        s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+        #s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+        s, r, o, ns, no, s_oov, o_oov = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
         if flag>9600:
@@ -205,7 +206,9 @@ class Trainer(object):
         else:
             reg = 0
 
-        ic_score_s, ic_score_o = self.image_compatibility(s, o)#, s_image, o_image)
+        #ic_score_s, ic_score_o ,tmp_ic_score_s_r, tmp_ic_score_s_o= self.image_compatibility(s,r, o)#, s_image, o_image)
+        ic_score_s, ic_score_o = self.image_compatibility(s,r, o)#, s_image, o_image)
+
 
         #print("Prachi Debug", "ic_score_s",ic_score_s.shape)
         #print("Prachi Debug", "reg", reg.shape, reg)
@@ -216,7 +219,19 @@ class Trainer(object):
             tmp=self.loss(fp, fns, fno)
             print("Prachi Debug", "self.loss(fp, fns, fno)", tmp.shape, CGREEN, tmp, CEND)
             print("Prachi Debug","ic_score_s","ic_score_o",CRED, ic_score_s,ic_score_o,CEND)
+
+        ##
+        s_oov = s_oov.type(torch.cuda.FloatTensor)
+        o_oov = o_oov.type(torch.cuda.FloatTensor)
+        ic_score_s = ic_score_s.type(torch.cuda.FloatTensor)
+        ic_score_o = ic_score_o.type(torch.cuda.FloatTensor)
+
+        ic_score_s = s_oov * ic_score_s
+        ic_score_o = o_oov * ic_score_o
+        ##
+
         image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o))).squeeze()
+        #image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o,tmp_ic_score_s_r, tmp_ic_score_s_o))).squeeze()
         if verbose_debug > 9999:
             print("Prachi Debug","image_compatibility_loss",image_compatibility_loss.shape,CVIOLET,image_compatibility_loss, CEND)
         #print("Prachi Debug::", self.image_compatibility_coefficient)
@@ -297,7 +312,7 @@ class Trainer(object):
         start = time.time()
         losses = []
         count = 0;
-        if self.model_name == 'image_model':
+        if self.model_name == 'image_model' or self.model_name == 'typed_image_model_reg':
             step_fn = self.step_aux
         elif self.train.flag_add_reverse:
             step_fn = self.step_icml

@@ -45,14 +45,17 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
         for k,v in entity_map.items():
             reverse_entity_map[v] = k
 
-    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range, rem=reverse_entity_map, add_unknowns=True)
+    if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model" or model_name == "typed_image_model_reg":
+        flag_image = 1
+
+    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range, rem=reverse_entity_map, add_unknowns=True, use_image=flag_image)
 
     if introduce_oov:
         ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
     ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
-                  add_unknowns=not introduce_oov)
+                  add_unknowns=not introduce_oov,use_image=flag_image)
     kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
-                   add_unknowns=not introduce_oov)
+                   add_unknowns=not introduce_oov,use_image=flag_image)
 
     if(verbose > 0):
         print("train size", ktrain.facts.shape)
