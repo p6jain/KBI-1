@@ -365,7 +365,10 @@ class typed_image_model_reg(torch.nn.Module):
 
         #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.0005*(head_type_compatibility_i * image_head_type_compatibility) + 0.005*(tail_type_compatibility_i * image_tail_type_compatibility))#44 - 56
 
-        return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.0005*(image_head + image_tail))#wt linear-norm = 10 (w/t reg:36):: w/o = 45 (note that other img-ty model used linear norm) !!IMPORTANT!!
+        return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.000005*(image_head + image_tail))#wt linear-norm = 10 (w/t reg:36):: w/o = 45 (note that other img-ty model used linear norm) !!IMPORTANT!!
+        ##yago coef = 0.000005 and fb15k 0.0005
+
+
         #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + (image_head + image_tail))#9
         #return self.mult * base_forward * image_head * image_tail #1
 

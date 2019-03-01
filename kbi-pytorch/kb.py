@@ -38,7 +38,7 @@ class kb(object):
             mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])
             flag_image = 0
             print("size of mid_image", len(mid_image))
-
+        rem=0
         with open(filename) as f:
             lines = f.readlines()
             lines = [l.split() for l in lines]
@@ -67,14 +67,18 @@ class kb(object):
                     else:
                         L.append(0.0)
                    
-                    #if L[0]+L[1] < 2:
-                    #    print("removing facts with no image!!");continue 
+                    if L[0]+L[1] < 2:
+                        rem=1;continue;
+                        #print("removing facts with no image!!");continue
+                    L = [1.0, 1.0]##old image model -- all on 
                     facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
                                 len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)]+L)
                 else:
                     facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
                                 len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
                 #
+            if rem:
+                print("########removing facts with no image!!#######")
         self.facts = numpy.array(facts, dtype='int64')
 
     def augment_image_information(self, mapping):
