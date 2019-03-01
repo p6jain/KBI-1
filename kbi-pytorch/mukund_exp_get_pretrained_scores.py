@@ -77,7 +77,7 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
     model_arguments['relation_count'] = len(ktrain.relation_map)
 
     if model_name == "image_model":
-        model_arguments['image_embedding'] = numpy.load("data/fb15k/image/image_embeddings_resnet152.dat")
+        model_arguments['image_embedding'] = numpy.load(dataset_root+"/image/image_embeddings_resnet152.dat")
 
     scoring_function = getattr(models, saved_model['model_name'])(**model_arguments)
     if has_cuda:

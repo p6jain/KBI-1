@@ -156,7 +156,7 @@ def ent_analysis(model_data,verbose=1):
     return e_performance
 
 if __name__ == "__main__":
-    path = "./analysis/"
+    path = "./analysis_fb15k_only_facts_with_image/"
     file_name="_analysis_r_e1e2_e1Predictede2Predicted_e1Ranke2Rank.csv"
     model_file="_best_valid_model.pt"
     models=["image_model","typed_model"]
@@ -168,5 +168,11 @@ if __name__ == "__main__":
             tmp = save_translated_file(file_name=path+"readable_"+model_name+file_name,model=saved_model,data=csv_reader)
             model_data[model_name] = tmp
     save_both_file(model_data, file_name=path+"readable_both_"+model_name+file_name)
-
+    print("SAVED COMBINED FILE")
+    ta = type_analysis(model_data)
+    print("TYPE ANALYSIS DONE")
+    ra = rel_analysis(model_data)
+    print("REL ANALYSIS DONE")
+    ea = ent_analysis(model_data)
+    print("ENT ANALYSIS DONE")
 
