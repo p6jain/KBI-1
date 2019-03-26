@@ -116,6 +116,7 @@ class complex(torch.nn.Module):
         s_re = self.E_re(s) if s is not None else self.E_re.weight.unsqueeze(0)
         r_re = self.R_re(r)
         o_re = self.E_re(o) if o is not None else self.E_re.weight.unsqueeze(0)
+        
         if self.clamp_v:
             s_im.data.clamp_(-self.clamp_v, self.clamp_v)
             s_re.data.clamp_(-self.clamp_v, self.clamp_v)
@@ -268,9 +269,9 @@ class typed_image_model_reg(torch.nn.Module):
         #image model
         self.image_compatibility_coefficient = image_compatibility_coefficient
         self.image_embedding = torch.nn.Embedding(self.entity_count,image_embedding.shape[-1]) #TO DO incluse OOV vec
-        oov_random_embedding = numpy.random.rand(1,image_embedding.shape[-1])
-        image_embedding = numpy.vstack((image_embedding,oov_random_embedding))
-        self.image_embedding.weight.data.copy_(torch.from_numpy(image_embedding))
+        #oov_random_embedding = numpy.random.rand(1,image_embedding.shape[-1])
+        #image_embedding = numpy.vstack((image_embedding,oov_random_embedding))
+        #self.image_embedding.weight.data.copy_(torch.from_numpy(image_embedding))
 
         self.image_embedding.weight.requires_grad = False
 
@@ -279,15 +280,15 @@ class typed_image_model_reg(torch.nn.Module):
         self.bn = nn.BatchNorm1d(self.embedding_dim, momentum=0.01)
 
         image_embedding = None
-
-    def forward(self, s, r, o, flag_debug=0):
+        print("IMPORTANT::TMP","added image-image compatibility!!")
+    def forward(self, s, r, o, s_im, o_im, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
         o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
         if s is not None:
-            tmp2 = self.image_embedding(s)
+            tmp2 = self.image_embedding(s_im)
             tmp = self.linear(tmp2);
             tmp = tmp.view(-1,self.embedding_dim)
             s_image = self.bn(tmp)
@@ -300,7 +301,7 @@ class typed_image_model_reg(torch.nn.Module):
             s_image = self.bn(tmp)
         
         if o is not None:
-            tmp2 = self.image_embedding(o)
+            tmp2 = self.image_embedding(o_im)
             tmp = self.linear(tmp2)
             tmp = tmp.view(-1,self.embedding_dim)
             o_image = self.bn(tmp)
@@ -333,7 +334,7 @@ class typed_image_model_reg(torch.nn.Module):
         '''
         image_head = (s_image*r_ht*s_t).sum(dim=-1)        
         image_tail = (o_image*r_tt*o_t).sum(dim=-1)
-
+        image_image = (s_image*o_image).sum(dim=-1)
  
         '''
         r_beta = self.R_beta(r)
@@ -365,8 +366,9 @@ class typed_image_model_reg(torch.nn.Module):
 
         #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.0005*(head_type_compatibility_i * image_head_type_compatibility) + 0.005*(tail_type_compatibility_i * image_tail_type_compatibility))#44 - 56
 
-        return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.000005*(image_head + image_tail))#wt linear-norm = 10 (w/t reg:36):: w/o = 45 (note that other img-ty model used linear norm) !!IMPORTANT!!
+        #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.00005*(image_head + image_tail))#wt linear-norm = 10 (w/t reg:36):: w/o = 45 (note that other img-ty model used linear norm) !!IMPORTANT!!
         ##yago coef = 0.000005 and fb15k 0.0005
+        return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.005*(image_head + image_tail + image_image))#
 
 
         #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + (image_head + image_tail))#9
@@ -393,7 +395,7 @@ class typed_image_model_reg(torch.nn.Module):
 
         return self.base_model.post_epoch()
 
-    def image_compatibility(self, s,r, o):
+    def image_compatibility(self, s,r, o, s_im, o_im):
         '''
         need to write a seperate function for evaluation scores
         -- as we plan to prestore all entity's image embeddings
@@ -402,9 +404,9 @@ class typed_image_model_reg(torch.nn.Module):
         s_t = self.E_t(s) #if s is not None else self.E_t.weight.unsqueeze(0)
         o_t = self.E_t(o) #if o is not None else self.E_t.weight.unsqueeze(0)
 
-        tmp = self.linear(self.image_embedding(s));tmp = tmp.view(-1,self.embedding_dim)
+        tmp = self.linear(self.image_embedding(s_im));tmp = tmp.view(-1,self.embedding_dim)
         s_image = self.bn(tmp)
-        tmp = self.linear(self.image_embedding(o));tmp = tmp.view(-1,self.embedding_dim)
+        tmp = self.linear(self.image_embedding(o_im));tmp = tmp.view(-1,self.embedding_dim)
         o_image = self.bn(tmp)
 
         s_image.unsqueeze_(1)
@@ -412,11 +414,13 @@ class typed_image_model_reg(torch.nn.Module):
 
         s_image_compatibility = (s_t * s_image).sum(-1)
         o_image_compatibility = (o_t * o_image).sum(-1)
-
+        image_image_compatibility = (s_image * o_image).sum(-1)
+        
         s_image_compatibility.squeeze()
         o_image_compatibility.squeeze()
+        image_image_compatibility.squeeze()
 
-        return -(torch.mean(s_image_compatibility)), -(torch.mean(o_image_compatibility))
+        return - s_image_compatibility, - o_image_compatibility, - image_image_compatibility#-(torch.mean(s_image_compatibility)), -(torch.mean(o_image_compatibility))
 
  
 
@@ -451,22 +455,18 @@ class typed_image_model(torch.nn.Module):
 
         #image model
         self.image_compatibility_coefficient = image_compatibility_coefficient
-        #self.image_model = EncoderCNN(self.embedding_dim)
-        ##self.image_embedding = torch.nn.Embedding(self.entity_count-1,image_embedding.shape[-1]) #TO DO incluse OOV vec
-        self.image_embedding = torch.nn.Embedding(self.entity_count,image_embedding.shape[-1]) #TO DO incluse OOV vec
-        oov_random_embedding = numpy.random.rand(1,image_embedding.shape[-1])
-        image_embedding = numpy.vstack((image_embedding,oov_random_embedding))
+        self.image_embedding = torch.nn.Embedding(image_embedding.shape[0],image_embedding.shape[-1]) #TO DO incluse OOV vec
         self.image_embedding.weight.data.copy_(torch.from_numpy(image_embedding))
 
-        self.image_embedding.weight.requires_grad = False
+        self.image_embedding.weight.requires_grad = False##
 
         self.linear = nn.Linear(image_embedding.shape[-1], self.embedding_dim)
         torch.nn.init.normal_(self.linear.weight.data, 0, 0.05)
         self.bn = nn.BatchNorm1d(self.embedding_dim, momentum=0.01)
 
         image_embedding = None
-
-    def forward(self, s, r, o, flag_debug=0):
+        print("IMPORTANT::TMP","added image-image compatibility!!")
+    def forward(self, s, r, o, s_im, o_im, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
@@ -480,8 +480,8 @@ class typed_image_model(torch.nn.Module):
         o_image =  self.linear(tmp)
         '''
         ##with bn -- 9 mrr
-        if s is not None:
-            tmp2 = self.image_embedding(s)
+        if 1:#s is not None:
+            tmp2 = self.image_embedding(s_im)
             tmp = self.linear(tmp2);
             tmp = tmp.view(-1,self.embedding_dim)
             s_image = self.bn(tmp)
@@ -489,12 +489,11 @@ class typed_image_model(torch.nn.Module):
             if tmp2.shape[1]!=1:
                 s_image = s_image.view(tmp2.shape[0],tmp2.shape[1],tmp.shape[1])
         else:
-            tmp = self.linear(self.image_embedding.weight.unsqueeze(0))
-            tmp = tmp.view(-1,self.embedding_dim)
-            s_image = self.bn(tmp)
+            s_image = 0
+          
         
-        if o is not None:
-            tmp2 = self.image_embedding(o)
+        if 1:#o is not None:
+            tmp2 = self.image_embedding(o_im)
             tmp = self.linear(tmp2)
             tmp = tmp.view(-1,self.embedding_dim)
             o_image = self.bn(tmp)
@@ -502,18 +501,41 @@ class typed_image_model(torch.nn.Module):
             if tmp2.shape[1]!=1:
                 o_image = o_image.view(tmp2.shape[0],tmp2.shape[1],tmp.shape[1])
         else:
-            tmp = self.linear(self.image_embedding.weight.unsqueeze(0));
-            tmp = tmp.view(-1,self.embedding_dim)
-            o_image = self.bn(tmp)
-        
-        head_type_compatibility_i = (s_image*r_ht).sum(-1)
-        head_type_compatibility = (s_t*r_ht).sum(-1)
-        image_head_type_compatibility = (s_t*s_image).sum(-1)
-        #print("Prachi Debug","s_t,r_ht", s_t.shape, r_ht.shape)
-        tail_type_compatibility_i = (o_image*r_tt).sum(-1)
-        tail_type_compatibility = (o_t*r_tt).sum(-1)
-        image_tail_type_compatibility = (o_t*s_image).sum(-1)
+            o_image = 0
+        '''
+        print("Ready!!:")
+        print("Prachi Debug","o_t",o_t.shape)
+        print("Prachi Debug","s_t",s_t.shape)
+        print("Prachi Debug","o_image",o_image.shape)
+        print("Prachi Debug","s_image",s_image.shape) 
+        '''
+        #if not(s_image.shape[0] == r_ht.shape[0]):#s is None:
+        #    s_image = s_image.view(s_image.shape[1], s_image.shape[0], s_image.shape[2])
+            #s_t = s_t.view(1, s_t.shape[0], s_t.shape[1])
+            #oov_vec = s_t[0][-1]; oov_vec_pad = oov_vec.repeat(s_image.shape[1]-s_t.shape[1],1)
+            #oov_vec_pad = oov_vec_pad.unsqueeze(0)
+            #s_t = torch.cat([s_t,oov_vec_pad],dim=1)
 
+        '''
+        head_type_compatibility_i = (s_image*r_ht).sum(-1)
+        '''
+        head_type_compatibility = (s_t*r_ht).sum(-1)
+        '''
+        image_head_type_compatibility = (s_t*s_image).sum(-1)
+        print("Prachi Debug","s_t,r_ht", s_t.shape, r_ht.shape)
+        print("Prachi Debug","s_image",s_image.shape)
+        print("Prachi Debug","o_image",o_image.shape)
+        print("Prachi Debug","r_tt",r_tt.shape)
+        print("Prachi Debug","o_t",o_t.shape)
+        print("Prachi Debug","image_head_type_compatibility",image_head_type_compatibility.shape)
+        print("Prachi Debug","head_type_compatibility",head_type_compatibility.shape)
+        print("Prachi Debug","head_type_compatibility_i",head_type_compatibility_i.shape)
+        tail_type_compatibility_i = (o_image*r_tt).sum(-1)
+        '''
+        tail_type_compatibility = (o_t*r_tt).sum(-1)
+        '''
+        image_tail_type_compatibility = (o_t*s_image).sum(-1)
+        '''
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         #head_type_compatibility_i = torch.nn.Sigmoid()(self.psi*head_type_compatibility_i)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
@@ -521,13 +543,17 @@ class typed_image_model(torch.nn.Module):
         #tail_type_compatibility_i = torch.nn.Sigmoid()(self.psi*tail_type_compatibility_i)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
         #image_tail_type_compatibility = torch.nn.Sigmoid()(self.psi*image_tail_type_compatibility)
-
         '''
         #all 3 like DM
         '''
         image_head = (s_image*r_ht*s_t).sum(dim=-1)        
         image_tail = (o_image*r_tt*o_t).sum(dim=-1)
+        
+        image_image = (o_image*s_image).sum(dim=-1)
 
+        image_head = torch.nn.Sigmoid()(s_image*r_ht*s_t).sum(dim=-1)        
+        image_tail = torch.nn.Sigmoid()(o_image*r_tt*o_t).sum(dim=-1)
+        image_image = torch.nn.Sigmoid()(o_image*s_image).sum(dim=-1)
  
         '''
         r_beta = self.R_beta(r)
@@ -542,6 +568,10 @@ class typed_image_model(torch.nn.Module):
         #tmp = self.mult*base_forward*head_type_compatibility*tail_type_compatibility
         #print("Prachi Debug","final type model score",tmp.shape)
         '''
+
+        score = self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.005*(image_head + image_tail + image_image))
+        #print("Prachi Debug","score",score.shape)
+        return score
 
         #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.5*(head_type_compatibility_i * tail_type_compatibility_i)) #51 - 1000
         #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.005*(head_type_compatibility_i * tail_type_compatibility_i)) #45 - 500
@@ -559,7 +589,10 @@ class typed_image_model(torch.nn.Module):
 
         #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.0005*(head_type_compatibility_i * image_head_type_compatibility) + 0.005*(tail_type_compatibility_i * image_tail_type_compatibility))#44 - 56
 
-        return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.0005*(image_head + image_tail))#wt linear-norm = 10 (w/t reg:36):: w/o = 45 (note that other img-ty model used linear norm) !!IMPORTANT!!
+        #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.0005*(image_head + image_tail))#wt linear-norm = 10 (w/t reg:36):: w/o = 45 (note that other img-ty model used linear norm) !!IMPORTANT!!
+
+        #####return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.005*(image_head + image_tail + image_image))#wt linear-norm = 10 (w/t reg:36):: w/o = 45 (note that other img-ty model used linear norm) !!IMPORTANT!!
+
         #return self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + (image_head + image_tail))#9
         #return self.mult * base_forward * image_head * image_tail #1
 
@@ -592,9 +625,36 @@ class typed_image_model(torch.nn.Module):
 
         return self.base_model.post_epoch()
 
+    def image_compatibility(self, s,r, o, s_im, o_im):
+        '''
+        need to write a seperate function for evaluation scores
+        -- as we plan to prestore all entity's image embeddings
+        '''
+        #print("Prachi Debug", s.shape, s_image.shape, o.shape, o_image.shape)
+        s_t = self.E_t(s) #if s is not None else self.E_t.weight.unsqueeze(0)
+        o_t = self.E_t(o) #if o is not None else self.E_t.weight.unsqueeze(0)
+
+        tmp = self.linear(self.image_embedding(s_im));tmp = tmp.view(-1,self.embedding_dim)
+        s_image = self.bn(tmp)
+        tmp = self.linear(self.image_embedding(o_im));tmp = tmp.view(-1,self.embedding_dim)
+        o_image = self.bn(tmp)
+
+        s_image.unsqueeze_(1)
+        o_image.unsqueeze_(1)
+
+        s_image_compatibility = (s_t * s_image).sum(-1)
+        o_image_compatibility = (o_t * o_image).sum(-1)
+        image_image_compatibility = (s_image * o_image).sum(-1)
+
+        s_image_compatibility.squeeze()
+        o_image_compatibility.squeeze()
+        image_image_compatibility.squeeze()
+
+        return - s_image_compatibility, - o_image_compatibility, - image_image_compatibility#-(torch.mean(s_image_compatibility)), -(torch.mean(o_image_compatibility))
 
 
 class only_image_model(torch.nn.Module):
+    #replace s,o type embedding w/t image embeddings
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, image_compatibility_coefficient=0, image_embedding=None):
         super(only_image_model, self).__init__()
 
@@ -738,10 +798,11 @@ class image_model(torch.nn.Module):
         #image model
         self.image_compatibility_coefficient = image_compatibility_coefficient
         #self.image_model = EncoderCNN(self.embedding_dim)
-        self.image_embedding = torch.nn.Embedding(self.entity_count-1,image_embedding.shape[-1]) #TO DO incluse OOV vec
+        self.image_embedding = torch.nn.Embedding(image_embedding.shape[0],image_embedding.shape[-1]) #TO DO incluse OOV vec
         self.image_embedding.weight.data.copy_(torch.from_numpy(image_embedding))
 
         self.image_embedding.weight.requires_grad = False##
+        print("TEMP!!!!!!!!!!!!!SWITCHING OFF image embed finetuning!!!!!!!")
 
         self.linear = nn.Linear(image_embedding.shape[-1], self.embedding_dim)
         torch.nn.init.normal_(self.linear.weight.data, 0, 0.05)##
@@ -750,7 +811,7 @@ class image_model(torch.nn.Module):
 
         image_embedding = None
 
-    def forward(self, s, r, o, flag_debug=0):
+    def forward(self, s, r, o, s_im, o_im, flag_debug=0):
         base_forward = self.base_model(s, r, o)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
@@ -778,7 +839,7 @@ class image_model(torch.nn.Module):
         """
         return self.base_model.regularizer(s, r, o)
 
-    def image_compatibility(self, s,r, o):
+    def image_compatibility(self, s,r, o, s_im, o_im):
         '''
         need to write a seperate function for evaluation scores
         -- as we plan to prestore all entity's image embeddings
@@ -792,9 +853,9 @@ class image_model(torch.nn.Module):
         #r_tt = self.R_tt(r)
         ##
 
-        tmp = self.linear(self.image_embedding(s));tmp = tmp.view(-1,self.embedding_dim)
+        tmp = self.linear(self.image_embedding(s_im));tmp = tmp.view(-1,self.embedding_dim)
         s_image = self.bn(tmp)
-        tmp = self.linear(self.image_embedding(o));tmp = tmp.view(-1,self.embedding_dim)
+        tmp = self.linear(self.image_embedding(o_im));tmp = tmp.view(-1,self.embedding_dim)
         o_image = self.bn(tmp)
 
         #s_image = torch.nn.Sigmoid()(s_image_1)
@@ -811,6 +872,7 @@ class image_model(torch.nn.Module):
         s_image_compatibility = (s_t * s_image).sum(-1)
         #o_image_compatibility = (o_image * o_image).sum(-1)
         o_image_compatibility = (o_t * o_image).sum(-1)
+        image_image_compatibility = (s_image * o_image).sum(-1) 
         #print("Prachi Debug","s_image_compatibility.shape",s_image_compatibility.shape)
         ##
         #s_image_compatibility = torch.nn.Sigmoid()(self.psi*s_image_compatibility)
@@ -829,7 +891,7 @@ class image_model(torch.nn.Module):
 
         #print("Prachi Debug","s_image_compatibility.shape 2", s_image_compatibility.shape)
 
-        return -(torch.mean(s_image_compatibility)), -(torch.mean(o_image_compatibility))#, -(torch.mean(s_r_image_compatibility)), -(torch.mean(o_r_image_compatibility))
+        return - s_image_compatibility, - o_image_compatibility, - image_image_compatibility#-(torch.mean(s_image_compatibility)), -(torch.mean(o_image_compatibility))#, -(torch.mean(s_r_image_compatibility)), -(torch.mean(o_r_image_compatibility))
 
     def post_epoch(self):
         if(self.unit_reg):

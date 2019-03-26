@@ -1,3 +1,9 @@
+'''
+March26'19
+Note that the code will not work for case when we allow unk ent (add_unknown=1)
+self.kb.nonoov_entity_count is used in place of len(self.kb.entity_map)
+'''
+
 import numpy
 import torch
 import torch.autograd
@@ -18,6 +24,12 @@ class data_loader(object):
         self.first_zero = first_zero
         self.flag_add_reverse = flag_add_reverse
 
+    def get_mapping(self, mapping,data):
+        keys, inv = numpy.unique(data, return_inverse=True)
+        vals = numpy.array([mapping[key] for key in keys])
+        result = vals[inv]
+        return result.reshape(data.shape)
+
     def sample(self, batch_size=1000, negative_count=10):
         """
         Generates a random sample from kb and returns them as numpy arrays.\n
@@ -31,20 +43,27 @@ class data_loader(object):
         r = numpy.expand_dims(facts[:, 1], -1)
         o = numpy.expand_dims(facts[:, 2], -1)
 
-        ns = numpy.random.randint(0, len(self.kb.entity_map), (batch_size, negative_count))
-        no = numpy.random.randint(0, len(self.kb.entity_map), (batch_size, negative_count))
+        ns = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
+        no = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
         if self.first_zero:
-            ns[:, 0] = len(self.kb.entity_map)-1
-            no[:, 0] = len(self.kb.entity_map)-1
-        if self.kb.use_image:
+            ns[:, 0] = self.kb.nonoov_entity_count-1
+            no[:, 0] = self.kb.nonoov_entity_count-1
+        if self.kb.additional_params["flag_use_image"]:#self.kb.use_image:
             #s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
             #o_image = numpy.array(self.kb.entity_id_image_matrix[o]).squeeze(1)
             #return [s, r, o, ns, no, s_image, o_image]
-            s_oov = numpy.expand_dims(facts[:, 3], -1)
-            o_oov = numpy.expand_dims(facts[:, 4], -1)
+            s_im = numpy.expand_dims(facts[:, 3], -1)
+            o_im = numpy.expand_dims(facts[:, 4], -1)
+            s_oov = numpy.expand_dims(facts[:, 5], -1)
+            o_oov = numpy.expand_dims(facts[:, 6], -1)
             s_oov = s_oov.astype(float)
             o_oov = o_oov.astype(float)
-            return [s, r, o, ns, no, s_oov, o_oov]
+            ic_r_score = numpy.expand_dims(facts[:, 7], -1)
+            ic_r_score = ic_r_score.astype(float)
+
+            ns_im = self.get_mapping(self.kb.mid_imid_map, ns) ##handle mid to image-id mapping here!!!
+            no_im = self.get_mapping(self.kb.mid_imid_map, no)
+            return [s, r, o, ns, no, s_im, o_im, ns_im, no_im, s_oov, o_oov, ic_r_score]
         else:
             return [s, r, o, ns, no]
 
@@ -72,11 +91,11 @@ class data_loader(object):
         r = r_tmp + check * (num_relations) 
         s, o = numpy.where(check, (o_tmp, s_tmp), (s_tmp, o_tmp))        
 
-        ns = numpy.random.randint(0, len(self.kb.entity_map), (batch_size, negative_count))
-        no = numpy.random.randint(0, len(self.kb.entity_map), (batch_size, negative_count))
+        ns = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
+        no = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
         if self.first_zero:
-            ns[:, 0] = len(self.kb.entity_map)-1
-            no[:, 0] = len(self.kb.entity_map)-1
+            ns[:, 0] = len(self.kb.nonoov_entity_count)-1
+            no[:, 0] = len(self.kb.nonoov_entity_count)-1
 
         if 0:#self.kb.entity_id_image_matrix.shape[0] > 1:
             s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
@@ -90,14 +109,14 @@ class data_loader(object):
         start, end = self.kb.type_entity_range[type_exclude] #
         #start = end = int(len(self.kb.entity_map)/2.0)
         diff1 = start
-        diff2 = len(self.kb.entity_map) - end - 1 #
+        diff2 = self.kb.nonoov_entity_count - end - 1 #
         ratio = 1.0*(diff1)/(diff2+diff1)
         if int(ratio * negative_count) >= 1 and (negative_count - int(ratio * negative_count)) > 1:
             a1 = numpy.random.choice(start, int(ratio * negative_count))
-            a2 = numpy.random.choice(len(self.kb.entity_map) - end - 1, negative_count - int(ratio * negative_count)) + end + 1
+            a2 = numpy.random.choice(self.kb.nonoov_entity_count - end - 1, negative_count - int(ratio * negative_count)) + end + 1
         elif (negative_count - int(ratio * negative_count)) > 1 and int(ratio * negative_count) < 1 :
             a1 = numpy.array([])
-            a2 = numpy.random.choice(len(self.kb.entity_map) - end - 1, negative_count) + end + 1
+            a2 = numpy.random.choice(self.kb.nonoov_entity_count - end - 1, negative_count) + end + 1
         else:
             a1 = numpy.random.choice(start,  negative_count)
             a2 = numpy.array([])

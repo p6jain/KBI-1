@@ -238,4 +238,5 @@ def get_entity_relation_id_neg_sensitive(mapping,dataset_root):
         for ele in entity_map:
             f_em.write(ele+"\t"+str(entity_map[ele])+"\n")
         f_em.close()
+    
     return entity_map, reverse_entity_map, type_entity_range

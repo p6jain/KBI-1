@@ -8,6 +8,7 @@ from torchvision import transforms
 from PIL import Image
 import numpy
 from tqdm import tqdm
+import pickle
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -54,6 +55,28 @@ def augment_image_information(entity_map, entity_mid_image_map):
     entity_id_image_matrix_np = numpy.array(entity_id_image_matrix, dtype = numpy.long)#
     #entity_id_image_matrix = torch.from_numpy(numpy.array(entity_id_image_matrix))
     return entity_id_image_matrix
+
+def augment_image_information_new(entity_mid_image_map):
+    '''
+    1. convert to matrix...needed for batching
+    2. store mid to image_id map (fresh)
+    after getting the embeddings .... new func call ..
+    3. create a dict back from matrix .. key = mid val is image embedding and dump
+    '''
+    i=0
+    entity_mid_image_id_map = {}
+
+    size_details = tuple([len(entity_mid_image_map)]+list(entity_mid_image_map[x].shape[1:]))
+    entity_id_image_matrix = numpy.zeros(size_details)
+
+    for x in entity_mid_image_map:
+        entity_id_image_matrix[i] = entity_mid_image_map[x]
+        entity_mid_image_id_map[x] = i
+        i+=1
+    #entity_id_image_matrix_np = numpy.array(entity_id_image_matrix, dtype = numpy.long)
+    return entity_id_image_matrix, entity_mid_image_id_map
+
+
 
 '''
 Real data access
@@ -105,9 +128,9 @@ def load_image(image_path):
 
 
 if __name__ == "__main__":
-    entity_map, _, _= get_entity_relation_id_neg_sensitive()
-    entity_id_image_map = fb15k_entity_image_map()
-    entity_id_image_matrix = augment_image_information(entity_map, entity_id_image_map)
+    #entity_map, _, _= get_entity_relation_id_neg_sensitive()
+    entity_mid_image_map = fb15k_entity_image_map()
+    entity_id_image_matrix, entity_mid_image_id_map = augment_image_information_new(entity_mid_image_map)#augment_image_information(entity_map, entity_mid_image_map)
 
     embed_size = 19
     entity_encoded_image_matrix = numpy.zeros((entity_id_image_matrix.shape[0],2048))
@@ -124,4 +147,9 @@ if __name__ == "__main__":
         feature = encoder(image)
         entity_encoded_image_matrix[i:i+batch_size] = feature
 
-    entity_encoded_image_matrix.dump("data/fb15k/image/image_embeddings_resnet152.dat")
+    entity_mid_image_map = {}
+    for x in entity_mid_image_id_map.keys():
+        entity_mid_image_map[x] = entity_encoded_image_matrix[entity_mid_image_id_map[x]]  
+    with open("data/fb15k/image/image_embeddings_resnet152_dict-mid-imageE.pkl","wb") as f:
+        pickle.dump(entity_mid_image_map,f) 
+    #entity_encoded_image_matrix.dump("data/fb15k/image/image_embeddings_resnet152.dat")

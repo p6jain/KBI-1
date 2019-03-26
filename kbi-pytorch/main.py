@@ -1,5 +1,8 @@
 '''
 time CUDA_VISIBLE_DEVICES=0 python3 main.py -d fb15k -m image_model -a '{"embedding_dim":19, "base_model_name":"complex", "base_model_arguments":{"embedding_dim":180}, "image_compatibility_coefficient":1}' -l softmax_loss -r 0.5 -g 0.30 -b 4500 -x 2000 -n 200 -v 1 -y 25 -e 500 -q 1
+time CUDA_VISIBLE_DEVICES=0 python3 main.py -d fb15k -m image_model -a '{"embedding_dim":19, "base_model_name":"complex", "base_model_arguments":{"embedding_dim":180}, "image_compatibility_coefficient":1, "additional_params":{"flag_use_image":1}}' -l softmax_loss -r 0.5 -g 0.30 -b 4500 -x 2000 -n 200 -v 1 -y 25 -e 500 -q 1
+
+
 '''
 
 import kb
@@ -16,7 +19,8 @@ import utils
 import extra_utils
 import numpy
 import re
-
+import sys
+import pickle
 
 has_cuda = torch.cuda.is_available()
 if not has_cuda:
@@ -26,18 +30,24 @@ if not has_cuda:
 def main(dataset_root, save_dir, model_name, model_arguments, loss_function, learning_rate, batch_size,
          regularization_coefficient, gradient_clip, optimizer_name, max_epochs, negative_sample_count, hooks,
          eval_every_x_mini_batches, eval_batch_size, resume_from_save, introduce_oov, verbose):
-    #print("Prachi::", "with distance margin 0.0, distance dot like l2 ent type")#, ent reg")
 
-    if re.search("_icml", model_name):
-        flag_add_reverse = 1
-    else:
-        flag_add_reverse = 0
-
+    flag_add_reverse = 1 if re.search("_icml", model_name) else 0
     model_name = model_name.split("_icml")[0]
 
     flag_image = 0
     if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model" or model_name == "typed_image_model_reg":
         flag_image = 1
+        with open(dataset_root+"/image/image_embeddings_resnet152_new_mid_iid.pkl","rb") as f:
+            im_entity_map = pickle.load(f)#mid to iid 
+        im_reverse_entity_map = {im_entity_map[ele]: ele for ele in im_entity_map}   #iid to mid
+        
+        image_embedding = numpy.load(dataset_root+"/image/image_embeddings_resnet152_new.dat") ###add
+        oov_random_embedding = numpy.random.rand(1,image_embedding.shape[-1])
+        image_embedding = numpy.vstack((image_embedding,oov_random_embedding))
+        model_arguments['image_embedding'] = image_embedding
+        oov_id = len(im_entity_map)
+        im_entity_map["<OOV>"] = oov_id; im_reverse_entity_map[oov_id] = "<OOV>"
+        print("OOV ID here", oov_id)
 
     tpm = None
     if verbose>0:
@@ -46,30 +56,63 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
 
     if resume_from_save:
         saved_model = torch.load(resume_from_save)
-        entity_map, type_entity_range = saved_model['entity_map'], saved_model['type_entity_range']
-        if 'reverse_entity_map' in saved_model:
-            reverse_entity_map = saved_model['reverse_entity_map']
-        else:
-            reverse_entity_map = {}
-            for k,v in entity_map.items():
-                reverse_entity_map[v] = k
-
+        entity_map = saved_model['entity_map']
     else:
-        entity_map, reverse_entity_map, type_entity_range = extra_utils.get_entity_relation_id_neg_sensitive(tpm, dataset_root)
+        entity_map = {}
+    
+    if flag_image:
+        #base_model_arguments
+        print("Prachi Debug 1:", model_arguments)
+        additional_params = model_arguments["additional_params"]
+        model_arguments.pop("additional_params")
+        print("Prachi Debug 1:", model_arguments)
+        #"flag_use_image", "flag_facts_with_image","flag_reg_penalty_only_images","flag_reg_penalty_ent_prob","flag_reg_penalty_image_compat"
+        ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, im_em=im_entity_map, im_rem=im_reverse_entity_map, additional_params=additional_params)#{'flag_use_image':1})
+        if introduce_oov:
+            ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
+            ktrain.mid_imid_map[ktrain.entity_map["<OOV>"]] = im_entity_map["<OOV>"]
+            ktrain.nonoov_entity_count = ktrain.entity_map["<OOV>"]+1          
+         
+        ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   im_em=ktrain.im_entity_map, im_rem=ktrain.im_reverse_entity_map, mid_imid = ktrain.mid_imid_map,
+                   add_unknowns=1, additional_params=additional_params, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)#{'flag_use_image':1})
 
-    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, type_entity_range=type_entity_range, rem=reverse_entity_map, use_image=flag_image)
+        kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   im_em=ktrain.im_entity_map, im_rem=ktrain.im_reverse_entity_map, mid_imid = ktrain.mid_imid_map,
+                   add_unknowns=1, additional_params=additional_params, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)#{'flag_use_image':1})
 
-    if introduce_oov:
-        ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
-    ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
-                  add_unknowns=not introduce_oov, use_image = flag_image)
-    kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
-                   add_unknowns=not introduce_oov, use_image = flag_image)
+        '''
+        ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   im_em=ktrain.im_entity_map, im_rem=ktrain.im_reverse_entity_map, mid_imid = ktrain.mid_imid_map,
+                   add_unknowns=not introduce_oov, additional_params=additional_params)#{'flag_use_image':1})
+
+        kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   im_em=ktrain.im_entity_map, im_rem=ktrain.im_reverse_entity_map, mid_imid = ktrain.mid_imid_map,
+                   add_unknowns=not introduce_oov, additional_params=additional_params)#{'flag_use_image':1})
+        '''
+    else:
+        ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map)
+        if introduce_oov:
+            ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
+            ktrain.nonoov_entity_count = ktrain.entity_map["<OOV>"]+1
+        ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   add_unknowns=not introduce_oov, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)
+        kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   add_unknowns=not introduce_oov, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)
 
     if(verbose > 0):
         print("train size", ktrain.facts.shape)
         print("test size", ktest.facts.shape)
         print("valid size", kvalid.facts.shape)
+        print("num non-oov ent", ktrain.nonoov_entity_count)
+        print("num entities", len(ktrain.entity_map))
+        print("num relations", len(ktrain.relation_map))
         enm = extra_utils.entity_name_map_fine(dataset_root)
         tnm = extra_utils.type_name_map_fine(dataset_root)
         ktrain.augment_type_information(tpm,enm,tnm)
@@ -90,14 +133,43 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     dlvalid = data_loader.data_loader(kvalid, has_cuda, flag_add_reverse=flag_add_reverse)
     dltest = data_loader.data_loader(ktest, has_cuda, flag_add_reverse=flag_add_reverse)
 
-    model_arguments['entity_count'] = len(ktrain.entity_map)
+
+    if introduce_oov:
+        model_arguments['entity_count'] = ktrain.entity_map["<OOV>"] + 1#len(ktrain.entity_map)
+    else:
+        model_arguments['entity_count'] = len(ktrain.entity_map)
     if flag_add_reverse:
         model_arguments['relation_count'] = len(ktrain.relation_map)*2
     else:
         model_arguments['relation_count'] = len(ktrain.relation_map)
-    if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model" or model_name =="typed_image_model_reg":
-        model_arguments['image_embedding'] = numpy.load(dataset_root+"/image/image_embeddings_resnet152.dat")
 
+    '''
+    if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model" or model_name =="typed_image_model_reg":
+        #model_arguments['image_embedding'] = numpy.load(dataset_root+"/image/image_embeddings_resnet152.dat") #dump dictionary
+        ''''''
+        To do:
+        load a dic now mid - image embed 
+        use ktrain.im_entity_map for building a matrix to be used
+        use may dump the im_entity_map and the matrix for reuse later!! 
+        ''''''
+        self.kvalid.im_entity_map["<OOV>"] = len(self.kvalid.im_entity_map)
+        print("check all same", len(self.ktrain.im_entity_map),len(self.ktest.im_entity_map),len(self.kvalid.im_entity_map))
+        with open(dataset_root+"/image/image_embeddings_resnet152_dict-mid-imageE.pkl","rb") as in_pkl:
+            mid_ie_map = pickle.load(in_pkl)
+
+        size_details = tuple([len(mid_ie_map)]+list(mid_ie_map[list(mid_ie_map.keys())[0]].shape[1:]))
+        entity_id_image_matrix = numpy.zeros(size_details)
+        oov_image=numpy.random.rand(1, 3, 224, 224);oov_count=0
+        for x in self.kvalid.im_entity_map:
+            if x in entity_mid_image_map.keys():
+                entity_id_image_matrix[entity_map[x]] = entity_mid_image_map[x]
+            else:
+                entity_id_image_matrix[entity_map[x]] = oov_image
+                oov_count+=1
+ 
+
+         model_arguments['image_embedding'] = 
+     '''
     scoring_function = getattr(models, model_name)(**model_arguments)
     if has_cuda:
         scoring_function = scoring_function.cuda()
@@ -107,7 +179,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
     if(not eval_batch_size):
         eval_batch_size = max(50, batch_size*2*negative_sample_count//len(ktrain.entity_map))
 
-    if model_name == "image_model" or model_name == "typed_image_model_reg":
+    if model_name == "image_model" or model_name == "typed_image_model" or model_name == "typed_image_model_reg":
         tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
@@ -152,13 +224,32 @@ if __name__ == "__main__":
     parser.add_argument('-z', '--debug', required=False, default=0, type=int)
     parser.add_argument('-k', '--hooks', required=False, default="[]")
     parser.add_argument('--data_repository_root', required=False, default='data')
+    parser.add_argument('-msg', '--message', required=False, default="")
     arguments = parser.parse_args()
+    time = str(datetime.datetime.now().isoformat(' ', 'seconds'))
     if arguments.save_dir is None:
+        tmp = json.loads(arguments.model_arguments);
+        if "additional_params" in tmp.keys():
+            tmp.pop("additional_params")
+        tmp  = str(tmp)
+
         arguments.save_dir = os.path.join("logs", "%s %s %s run on %s starting from %s" % (arguments.model,
-                                                                                        arguments.model_arguments,
+                                                                                        tmp,#arguments.model_arguments,
                                                                                         arguments.loss,
                                                                                         arguments.dataset,
-                                                                                     str(datetime.datetime.now())))
+                                                                                        str(datetime.datetime.now())))
+        '''
+        tmp = json.loads(arguments.model_arguments);
+        if "additional_params" in tmp.keys():
+            tmp.pop("additional_params")
+        tmp  = str(tmp)
+        arguments.save_dir = os.path.join("logs", "%s %s run on %s starting from %s" % (arguments.model,
+                                                                                        tmp,#arguments.model_arguments,
+                                                                                        #arguments.loss,
+                                                                                        arguments.dataset,
+                                                                                        time))
+        
+        '''
     arguments.model_arguments = json.loads(arguments.model_arguments)
     arguments.hooks = json.loads(arguments.hooks)
     if not arguments.debug:
@@ -169,6 +260,8 @@ if __name__ == "__main__":
             utils.colored_print("yellow", "directory %s already exists" % arguments.save_dir)
         utils.duplicate_stdout(os.path.join(arguments.save_dir, "log.txt"))
     print(arguments)
+    print("User Message:: ", arguments.message)
+    print("Command:: ", (" ").join(sys.argv))
     dataset_root = os.path.join(arguments.data_repository_root, arguments.dataset)
     main(dataset_root, arguments.save_dir, arguments.model, arguments.model_arguments, arguments.loss,
          arguments.learning_rate, arguments.batch_size,arguments.regularization_coefficient, arguments.gradient_clip,

@@ -90,6 +90,7 @@ class Trainer(object):
         return x, rg, debug
 
     def step(self):
+        #s, r, o, ns, no, _, _, _ = self.train.tensor_sample(self.batch_size, self.negative_count)
         s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
@@ -185,7 +186,7 @@ class Trainer(object):
     def step_aux(self):
         #s, r, o, ns, no, s_image, o_image = self.train.tensor_sample(self.batch_size, self.negative_count)
         #s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
-        s, r, o, ns, no, s_oov, o_oov = self.train.tensor_sample(self.batch_size, self.negative_count)
+        s, r, o, ns, no, s_im, o_im, ns_im, no_im, s_oov, o_oov, ic_r_regC = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
         if flag>9600:
@@ -193,13 +194,13 @@ class Trainer(object):
         else:
             flag_debug = 0
 
-        fp = self.scoring_function(s, r, o, flag_debug=flag_debug)
+        fp = self.scoring_function(s, r, o, s_im, o_im, flag_debug=flag_debug)
         if flag_debug:
-            fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
-            fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+            fns = self.scoring_function(ns, r, o, ns_im, o_im, flag_debug=flag_debug+1)
+            fno = self.scoring_function(s, r, no, s_im, no_im, flag_debug=flag_debug+1)
         else:
-            fns = self.scoring_function(ns, r, o, flag_debug=0)
-            fno = self.scoring_function(s, r, no, flag_debug=0)
+            fns = self.scoring_function(ns, r, o, ns_im, o_im, flag_debug=0)
+            fno = self.scoring_function(s, r, no, s_im, no_im, flag_debug=0)
         if self.regularization_coefficient is not None:
             reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
@@ -207,35 +208,48 @@ class Trainer(object):
             reg = 0
 
         #ic_score_s, ic_score_o ,tmp_ic_score_s_r, tmp_ic_score_s_o= self.image_compatibility(s,r, o)#, s_image, o_image)
-        ic_score_s, ic_score_o = self.image_compatibility(s,r, o)#, s_image, o_image)
+        ic_score_s, ic_score_o, im_score  = self.image_compatibility(s,r, o, s_im, o_im)#, s_image, o_image)
 
 
         #print("Prachi Debug", "ic_score_s",ic_score_s.shape)
         #print("Prachi Debug", "reg", reg.shape, reg)
+        #print("Prachi Debug", "im_score",im_score.shape)
         verbose_debug = random.randint(1,10001)
         if verbose_debug > 9999:
             CGREEN  = '\33[32m';CRED = '\033[91m';CVIOLET = '\33[35m'
             CEND = '\033[0m'
             tmp=self.loss(fp, fns, fno)
             print("Prachi Debug", "self.loss(fp, fns, fno)", tmp.shape, CGREEN, tmp, CEND)
-            print("Prachi Debug","ic_score_s","ic_score_o",CRED, ic_score_s,ic_score_o,CEND)
+            print("Prachi Debug","ic_score_s","ic_score_o",CRED, torch.mean(ic_score_s),torch.mean(ic_score_o), torch.mean(im_score),CEND)
 
-        ##
-        s_oov = s_oov.type(torch.cuda.FloatTensor)
-        o_oov = o_oov.type(torch.cuda.FloatTensor)
-        ic_score_s = ic_score_s.type(torch.cuda.FloatTensor)
-        ic_score_o = ic_score_o.type(torch.cuda.FloatTensor)
+        if self.image_compatibility_coefficient:
+            ##
+            s_oov = s_oov.type(torch.cuda.FloatTensor)
+            o_oov = o_oov.type(torch.cuda.FloatTensor)
+            ic_score_s = ic_score_s.type(torch.cuda.FloatTensor)
+            ic_score_o = ic_score_o.type(torch.cuda.FloatTensor)
+            #print("Prachi Debug", "s_oov",s_oov.shape)
+            #print("Prachi Debug", "ic_score_s", ic_score_s.type())
+            ic_score_s = s_oov * ic_score_s
+            ic_score_o = o_oov * ic_score_o
+            ic_r_regC = ic_r_regC.type(torch.cuda.FloatTensor)
+            im_score = ic_r_regC * im_score
+            ##
 
-        ic_score_s = s_oov * ic_score_s
-        ic_score_o = o_oov * ic_score_o
-        ##
+            image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o))).squeeze()
+            im_score_loss = torch.mean(im_score)
+            #print("Prachi Debug", "image_compatibility_loss",image_compatibility_loss.shape)
+            #print("Prachi Debug", "im_score_loss",im_score_loss.shape)
+            #image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o,tmp_ic_score_s_r, tmp_ic_score_s_o))).squeeze()
+            if verbose_debug > 9999:
+                print("Prachi Debug","image_compatibility_loss",CVIOLET,image_compatibility_loss, CEND)
+                print("Prachi Debug","im_score_loss",CVIOLET,im_score_loss, CEND)
+            #print("Prachi Debug::", self.image_compatibility_coefficient)
+        else:
+            image_compatibility_loss = 0.0
+            im_score_loss = 0.0
 
-        image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o))).squeeze()
-        #image_compatibility_loss = torch.mean(torch.stack((ic_score_s,ic_score_o,tmp_ic_score_s_r, tmp_ic_score_s_o))).squeeze()
-        if verbose_debug > 9999:
-            print("Prachi Debug","image_compatibility_loss",image_compatibility_loss.shape,CVIOLET,image_compatibility_loss, CEND)
-        #print("Prachi Debug::", self.image_compatibility_coefficient)
-        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg + self.image_compatibility_coefficient*image_compatibility_loss#(ic_score_s+ic_score_o)
+        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg + self.image_compatibility_coefficient*(image_compatibility_loss + im_score_loss)#(ic_score_s+ic_score_o)
 
         x = loss.item()
         rg = reg.item()
@@ -266,7 +280,7 @@ class Trainer(object):
 
         state['entity_map'] = self.train.kb.entity_map
         state['reverse_entity_map'] = self.train.kb.reverse_entity_map
-        state['type_entity_range'] = self.train.kb.type_entity_range
+        #state['type_entity_range'] = self.train.kb.type_entity_range
 
         filename = os.path.join(self.save_directory,
                                     "epoch_%.1f_val_%5.2f_%5.2f_%5.2f_test_%5.2f_%5.2f_%5.2f.pt"%(state['epoch'],
@@ -312,7 +326,7 @@ class Trainer(object):
         start = time.time()
         losses = []
         count = 0;
-        if self.model_name == 'image_model' or self.model_name == 'typed_image_model_reg':
+        if self.model_name == "image_model" or self.model_name == "only_image_model" or self.model_name == "typed_image_model" or self.model_name == "typed_image_model_reg":#self.model_name == 'image_model' or self.model_name == 'typed_image_model_reg':
             step_fn = self.step_aux
         elif self.train.flag_add_reverse:
             step_fn = self.step_icml

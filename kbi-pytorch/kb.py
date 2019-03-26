@@ -2,83 +2,158 @@ import numpy
 import torch
 import re
 
+
+def get_image_data(dataset_root, flag_dict):
+    mid_image =[]
+    entity_object_probs = {}
+    entity_subject_probs = {}
+    relation_image_compat_score = {}
+
+    if flag_dict["flag_use_image"]:#flag_facts_with_image"]:
+        #print("Using Facts which have images for both entities")
+        mid_image = open(dataset_root+"/mid_image_path.txt").readlines()
+        mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])  
+        print("num (all inc test/valid) ent w/t image", len(mid_image))
+
+    #ensure we have prob for all ent...if val is user a given bar use 0 or 1 as suited
+    if flag_dict["flag_reg_penalty_ent_prob"]:
+        print("Penalizing ent_type and image comaptibility scores with entity probability")
+        entity_object_probs = open(dataset_root+"/entity_object_probs.csv").readlines()
+        entity_subject_probs = open(dataset_root+"/entity_subject_probs.csv").readlines()
+
+        entity_object_probs = dict([((",").join(ele.strip("\n").split(",")[:-1]), float(ele.strip("\n").split(",")[-1])) for ele in entity_object_probs]) 
+        entity_subject_probs= dict([((",").join(ele.strip("\n").split(",")[:-1]), float(ele.strip("\n").split(",")[-1])) for ele in entity_subject_probs])
+        
+    if flag_dict["flag_reg_penalty_image_compat"]:    
+        print("Penalizing image_sub and image_obj comaptibility scores with relation scores")
+        relation_image_compat_score = open(dataset_root+"/images_large/relation_image_comp_sigmoid.csv").readlines()#relation_mean_image_comp.csv").readlines()
+        relation_image_compat_score = dict([((",").join(ele.strip("\n").split(",")[:-2]), float(ele.strip("\n").split(",")[-1])) for ele in relation_image_compat_score]) 
+
+   
+    return mid_image, entity_subject_probs, entity_object_probs, relation_image_compat_score    
+
 class kb(object):
     """
     Stores a knowledge base as an numpy array. Can be generated from a file. Also stores the entity/relation mappings
     (which is the mapping from entity names to entity id) and possibly entity type information.
     """
-    def __init__(self, filename, em=None, rm=None, type_entity_range=None, rem=None, rrm=None, add_unknowns=True, use_image=0):
+    def __init__(self, filename, em=None, rm=None, rem=None, rrm=None, im_em=None, im_rem=None, mid_imid=None, add_unknowns=True, additional_params = {}, nonoov_entity_count=None):
         """
         Duh...
         :param filename: The file name to read the kb from
         :param em: Prebuilt entity map to be used. Can be None for a new map to be created
         :param rm: prebuilt relation map to be used. Same as em
         :param add_unknowns: Whether new entites are to be acknowledged or put as <UNK> token.
+        :param additional_params: Support for flag_use_image, 
+                                    flag_facts_with_image, flag_reg_penalty_only_images, 
+                                    flag_reg_penalty_ent_prob, 
+                                    flag_reg_penalty_image_compat (image compatibility is imp only for some relations, 
+                                    train set used to get score corresp to every rel - score is avg dot(sub_im, obj_im)) 
         """
+        print("Not using image_compat score unless explicitly pecified from now on!")
+
         self.entity_map = {} if em is None else em
         self.relation_map = {} if rm is None else rm
-        self.type_entity_range = {} if type_entity_range is None else type_entity_range
         self.reverse_entity_map = {} if rem is None else rem
         self.reverse_relation_map = {} if rrm is None else rrm
+        
+        self.im_entity_map = {} if im_em is None else im_em
+        self.im_reverse_entity_map = {} if im_rem is None else im_rem
+
+        self.mid_imid_map = {} if mid_imid is None else mid_imid
+
         self.entity_id_image_matrix = numpy.array([0])
-        self.use_image = use_image
+        self.additional_params = {} if additional_params is None else additional_params
+
+        self.nonoov_entity_count = 0 if nonoov_entity_count is None else nonoov_entity_count #non-oov ent + 1 oov ent
+         
         if filename is None:
             return
         facts = []
-        
-        '''
-        tmp: removing facts with no image
-        '''
+       
         mid_image = set([]);flag_image = 1
         dataset_root = ("/").join(filename.split("/")[:-1])
-        if self.use_image:
+
+        #setting flags here
+        if not "flag_use_image" in self.additional_params.keys():
+            self.additional_params["flag_use_image"] = 0 
+        for key in ["flag_facts_with_image","flag_reg_penalty_only_images","flag_reg_penalty_ent_prob","flag_reg_penalty_image_compat"]:
+            if not key in self.additional_params.keys():
+                self.additional_params[key] = 0 
+            if self.additional_params[key]:
+                self.additional_params["flag_use_image"] = 1
+
+        print("additional_params", self.additional_params)
+        #get data if resp flag on
+        if self.additional_params["flag_use_image"]:
             print("using images")
-            #print("removing facts with no image!!")
-            mid_image = open(dataset_root+"/mid_image_path.txt").readlines()
-            mid_image = set([ele.strip("\n").split("\t")[0] for ele in mid_image])
-            flag_image = 0
-            print("size of mid_image", len(mid_image))
-        rem=0
+            mid_image, entity_subject_probs, entity_object_probs, relation_image_compat_score = get_image_data(dataset_root, additional_params)
+
         with open(filename) as f:
             lines = f.readlines()
             lines = [l.split() for l in lines]
 
             for l in lines:
-                if 1:##flag_image or (l[0] in mid_image and l[2] in mid_image):
+                if (not(additional_params['flag_use_image'])) or (not(additional_params['flag_facts_with_image'])) or (additional_params['flag_facts_with_image'] and l[0] in mid_image and l[2] in mid_image):
                     if(add_unknowns):
                         if(l[1] not in self.relation_map):
-                            self.reverse_relation_map[len(self.relation_map)] = l[1]
-                            self.relation_map[l[1]] = len(self.relation_map)
+                            tmp = len(self.relation_map)
+                            self.relation_map[l[1]] = tmp
+                            self.reverse_relation_map[tmp] = l[1]
                         if(l[0] not in self.entity_map):
-                            self.reverse_entity_map[len(self.entity_map)] = l[0]
-                            self.entity_map[l[0]] = len(self.entity_map)
+                            tmp = len(self.entity_map)
+                            self.entity_map[l[0]] = tmp
+                            self.reverse_entity_map[tmp] = l[0]
                         if(l[2] not in self.entity_map):
-                            self.reverse_entity_map[len(self.entity_map)] = l[2]
-                            self.entity_map[l[2]] = len(self.entity_map)
-                #only for all facts
-                if self.use_image:
-                    L=[]
-                    if (l[0] in mid_image):
-                        L.append(1.0)
+                            tmp = len(self.entity_map)
+                            self.entity_map[l[2]] = tmp
+                            self.reverse_entity_map[tmp] = l[2]
+                    '''
+                    if self.additional_param["flag_use_image"]:       
+                        if(l[0] not in self.im_entity_map) and (l[0] in mid_image):
+                            tmp = len(self.im_entity_map) 
+                            self.im_entity_map[l[0]] = tmp
+                            self.im_reverse_entity_map[tmp] = l[0]
+                        if(l[2] not in self.im_entity_map) and (l[2] in mid_image): 
+                            tmp = len(self.im_entity_map)
+                            self.im_entity_map[l[2]] = tmp
+                            self.im_reverse_entity_map[tmp] = l[2]
+                    '''
+                    if self.additional_params["flag_use_image"]:#(add_unknowns): #used only for handling neg samples -- data seen in train
+                        self.mid_imid_map[self.entity_map.get(l[0], len(self.entity_map)-1)] = self.im_entity_map.get(l[0], self.im_entity_map["<OOV>"])#same::#mid_image))
+                        self.mid_imid_map[self.entity_map.get(l[2], len(self.entity_map)-1)] = self.im_entity_map.get(l[2], self.im_entity_map["<OOV>"])#same:#mid_image))  
+                        
+                    if additional_params['flag_use_image']:
+                        entity_reg = []; 
+                        image_r_reg = 1.0
+                        if (l[0] in mid_image):
+                            tmp = entity_subject_probs[l[0]] if (additional_params['flag_reg_penalty_ent_prob'] and l[0] in entity_subject_probs.keys()) else 1.0
+                            entity_reg.append(tmp)
+                        else:
+                            tmp = 0.0 if additional_params['flag_reg_penalty_only_images'] else 1.0
+                            entity_reg.append(tmp);
+
+                        if (l[2] in mid_image):
+                            tmp = entity_object_probs[l[2]] if (additional_params['flag_reg_penalty_ent_prob'] and l[2] in entity_object_probs.keys()) else 1.0
+                            entity_reg.append(tmp);
+                        else:
+                            tmp = 0.0 if additional_params['flag_reg_penalty_only_images'] else 1.0
+                            entity_reg.append(tmp);
+                  
+                        if l[1] in relation_image_compat_score.keys():
+                            image_r_reg = relation_image_compat_score[l[1]] if additional_params['flag_reg_penalty_image_compat'] else 1.0
+                        else:
+                            image_r_reg = 0.0 #if additional_params['flag_reg_penalty_image_compat'] else 1.0
+
+                        facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
+                                len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)] + 
+                                [self.im_entity_map.get(l[0], self.im_entity_map["<OOV>"]), self.im_entity_map.get(l[2], self.im_entity_map["<OOV>"])] + 
+                                                                                                                               entity_reg + [image_r_reg]) #8
+                        # oov id for images = len(mid_image)
                     else:
-                        L.append(0.0)
-                    if (l[2] in mid_image):
-                        L.append(1.0)
-                    else:
-                        L.append(0.0)
-                   
-                    if L[0]+L[1] < 2:
-                        rem=1;continue;
-                        #print("removing facts with no image!!");continue
-                    L = [1.0, 1.0]##old image model -- all on 
-                    facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
-                                len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)]+L)
-                else:
-                    facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
+                        facts.append([self.entity_map.get(l[0], len(self.entity_map)-1), self.relation_map.get(l[1],
                                 len(self.relation_map)-1), self.entity_map.get(l[2], len(self.entity_map)-1)])
-                #
-            if rem:
-                print("########removing facts with no image!!#######")
+
         self.facts = numpy.array(facts, dtype='int64')
 
     def augment_image_information(self, mapping):
@@ -90,16 +165,11 @@ class kb(object):
 
         self.entity_mid_image_map = mapping
         entity_id_image_map = {}
-        #print("Prachi","kb","1")
         for x in self.entity_mid_image_map:
             entity_id_image_map[self.entity_map[x]] = self.entity_mid_image_map[x]
-        #print("Prachi","kb","2")
         self.entity_id_image_map = entity_id_image_map#
-        #print("Prachi","kb","3")
-        #size_details = tuple([len(self.entity_mid_image_map)]+list(self.entity_mid_image_map[x].shape[1:]))
-        size_details = tuple([len(self.entity_map)]+list(self.entity_mid_image_map[x].shape[1:]))
+        size_details = tuple([self.nonoov_entity_count]+list(self.entity_mid_image_map[x].shape[1:]))#len(self.entity_map)]+list(self.entity_mid_image_map[x].shape[1:]))
         entity_id_image_matrix = numpy.zeros(size_details)
-        #print("Prachi","kb","4")
         oov_image=numpy.random.rand(1, 3, 224, 224);oov_count=0
         for x in self.entity_map:#self.entity_mid_image_map:
             if x in self.entity_mid_image_map.keys():
@@ -107,11 +177,8 @@ class kb(object):
             else:
                 entity_id_image_matrix[self.entity_map[x]] = oov_image
                 oov_count+=1
-        #print("Prachi","kb","5", oov_count)
         self.entity_id_image_matrix_np = numpy.array(entity_id_image_matrix, dtype = numpy.long)#
-        #print("Prachi","kb","6")
         entity_id_image_matrix = torch.from_numpy(numpy.array(entity_id_image_matrix))
-        #print("Prachi","kb","7")
         self.entity_id_image_matrix = entity_id_image_matrix#
 
 
@@ -122,7 +189,7 @@ class kb(object):
         :return: None
         """
         self.type_map = mapping
-        entity_type_matrix = numpy.zeros((len(self.entity_map), 1))
+        entity_type_matrix = numpy.zeros((self.nonoov_entity_count, 1))#len(self.entity_map), 1))
         for x in self.type_map:
             entity_type_matrix[self.entity_map[x], 0] = self.type_map[x]
         self.entity_type_matrix_np = numpy.array(entity_type_matrix, dtype = numpy.long)
@@ -140,6 +207,15 @@ class kb(object):
         for i in range(self.facts.shape[0]):
             entities[self.facts[i][1]].add(self.facts[i][index])
         return numpy.array([len(x) for x in entities])
+
+    def get_id_iid_mapping_all(self, data):
+        mapping = self.mid_imid_map
+        keys, inv = numpy.unique(data, return_inverse=True)
+        vals = numpy.array([mapping[key] for key in keys])
+        result = vals[inv]
+        return result.reshape(data.shape)
+
+
 
 
 def union(kb_list):

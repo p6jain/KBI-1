@@ -60,7 +60,7 @@ class ranker(object):
         result= numpy.array(ks)
         return result
 
-    def forward(self, s, r, o, knowns, flag_s_o=0):
+    def forward(self, s, r, o, knowns, flag_s_o=0, s_im=None, o_im=None, all_im=None, all_e=None):
         """
         Returns the rank of o for the query (s, r, _) as given by the scoring function\n
         :param s: The head of the query
@@ -69,18 +69,28 @@ class ranker(object):
         :param knowns: The set of all o that have been seen in all_kb with (s, r, _) as given by ket_knowns above
         :return: rank of o, score of each entity and score of the gold o
         """
-        if flag_s_o:
-            scores = self.scoring_function(s, r, None).data
-            score_of_expected = scores.gather(1, o.data)
+        if not(s_im is None) and not(o_im is None):
+            if flag_s_o:
+                scores = self.scoring_function(s, r, all_e, s_im, all_im).data#
+                #scores = self.scoring_function(s, r, None, s_im, all_im).data#o_im).data
+                score_of_expected = scores.gather(1, o.data)
+            else:
+                scores = self.scoring_function(all_e, r, o, all_im, o_im).data#
+                #scores = self.scoring_function(None, r, o, all_im, o_im).data#s_im, o_im).data
+                score_of_expected = scores.gather(1, s.data)
         else:
-            scores = self.scoring_function(None, r, o).data
-            score_of_expected = scores.gather(1, s.data)
+            if flag_s_o:
+                scores = self.scoring_function(s, r, None).data
+                score_of_expected = scores.gather(1, o.data)
+            else:
+                scores = self.scoring_function(None, r, o).data
+                score_of_expected = scores.gather(1, s.data)
 
         #"""
         scores.scatter_(1, knowns, self.scoring_function.minimum_value)
-        greater = scores.ge(score_of_expected).float()
-        equal = scores.eq(score_of_expected).float()
-        rank = greater.sum(dim=1)+1+equal.sum(dim=1)/2.0
+        greater = scores.gt(score_of_expected).float()
+        #equal = scores.eq(score_of_expected).float()
+        rank = greater.sum(dim=1)+1  #+equal.sum(dim=1)/2.0
         return rank, scores, score_of_expected
         #"""
 
@@ -117,7 +127,22 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
     relation_subject_type_correct = {}
     relation_object_type_total = {}
     relation_object_type_correct = {}
+
+    if kb.additional_params["flag_use_image"]:
+        all_e = numpy.arange(len(kb.entity_map)) 
+     
+        all_im = kb.get_id_iid_mapping_all(all_e)
+        all_im = all_im.reshape(1,all_im.shape[0])#,1)
+        all_im = torch.autograd.Variable(torch.from_numpy(all_im).cuda())
     
+        all_e[all_e>kb.nonoov_entity_count-1] = kb.nonoov_entity_count-1
+        all_e = all_e.reshape(1,all_e.shape[0])
+        all_e = torch.autograd.Variable(torch.from_numpy(all_e).cuda())
+        '''
+        if any fact item has id > id of oov kb.entity_map["<OOV>"]
+        make it oov for s, r, o but not for image: done
+        '''
+ 
     for i in range(0, int(facts.shape[0]), batch_size):
         start = i
         end = min(i+batch_size, facts.shape[0])
@@ -126,18 +151,27 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
         o = facts[start:end, 2]
         knowns_o = ranker.get_knowns(s, r, flag_s_o=1)
         knowns_s = ranker.get_knowns(o, r, flag_s_o=0)
+        s[s>kb.nonoov_entity_count-1] = kb.nonoov_entity_count-1 
+        o[o>kb.nonoov_entity_count-1] = kb.nonoov_entity_count-1
         s = torch.autograd.Variable(torch.from_numpy(s).cuda().unsqueeze(1), requires_grad=False)
         r = torch.autograd.Variable(torch.from_numpy(r).cuda().unsqueeze(1), requires_grad=False)
         o = torch.autograd.Variable(torch.from_numpy(o).cuda().unsqueeze(1), requires_grad=False)
         knowns_s = torch.from_numpy(knowns_s).cuda()
         knowns_o = torch.from_numpy(knowns_o).cuda()
-        
-        ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
-        ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
+
+        if kb.additional_params["flag_use_image"]:
+            s_im = facts[start:end, 3]
+            o_im = facts[start:end, 4]
+            s_im = torch.autograd.Variable(torch.from_numpy(s_im).cuda().unsqueeze(1), requires_grad=False)
+            o_im = torch.autograd.Variable(torch.from_numpy(o_im).cuda().unsqueeze(1), requires_grad=False)
+            ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1, s_im=s_im, o_im=o_im, all_im=all_im, all_e=all_e)
+            ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0, s_im=s_im, o_im=o_im, all_im=all_im, all_e=all_e)
+        else:
+            ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
+            ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
 
         # ranks_o, scores_o, score_of_expected_o, base_o, base_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
         # ranks_s, scores_s, score_of_expected_s, base_s, base_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
-
         #e1,r,?
         totals['e2']['mr'] += ranks_o.sum()
         totals['e2']['mrr'] += (1.0/ranks_o).sum()
@@ -187,7 +221,7 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
             for hook in hooks:
                 hook(s.data, r.data, o.data, ranks_o, top_scores_o, top_predictions_o, expected_type_o, top_predictions_type_o)
 
-
+            '''
             #with open("analysis_r_e1e2_e1Type_e2Type_e1Predictede2Predicted_e1PredictedType_e2PredictedType.csv","w") as f:    
             with open("analysis_r_e1e2_e1Predictede2Predicted_e1Ranke2Rank.csv","a") as f:
                 #writer = csv.writer(f, delimiter='\t')
@@ -205,7 +239,7 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
                     f.write(("\t").join([str(ele) for ele in [r_w,s_w,o_w,ts_w,to_w,r_s_w, r_o_w]])+"\n")
                 f.flush()
                 f.close();
-
+             '''
         utils.print_progress_bar(end, facts.shape[0], "Eval on %s" % name, (("|M| mrr:%3.2f|h10:%3.2f%"
                                                                                   "%|h1:%3.2f|e1| mrr:%3.2f|h10:%3.2f%"
                                                                                   "%|h1:%3.2f|e2| mrr:%3.2f|h10:%3.2f%"
