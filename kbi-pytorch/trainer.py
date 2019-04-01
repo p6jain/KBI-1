@@ -248,7 +248,6 @@ class Trainer(object):
         else:
             image_compatibility_loss = 0.0
             im_score_loss = 0.0
-
         loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg + self.image_compatibility_coefficient*(image_compatibility_loss + im_score_loss)#(ic_score_s+ic_score_o)
 
         x = loss.item()
@@ -281,6 +280,15 @@ class Trainer(object):
         state['entity_map'] = self.train.kb.entity_map
         state['reverse_entity_map'] = self.train.kb.reverse_entity_map
         #state['type_entity_range'] = self.train.kb.type_entity_range
+        state['relation_map'] = self.train.kb.relation_map
+        state['reverse_relation_map'] = self.train.kb.reverse_relation_map 
+
+        state['im_entity_map'] = self.train.kb.im_entity_map
+        state['im_reverse_entity_map'] = self.train.kb.im_reverse_entity_map 
+        state['mid_imid_map'] = self.train.kb.mid_imid_map
+        state['additional_params'] = self.train.kb.additional_params
+        state['nonoov_entity_count'] = self.train.kb.nonoov_entity_count 
+
 
         filename = os.path.join(self.save_directory,
                                     "epoch_%.1f_val_%5.2f_%5.2f_%5.2f_test_%5.2f_%5.2f_%5.2f.pt"%(state['epoch'],
@@ -332,6 +340,14 @@ class Trainer(object):
             step_fn = self.step_icml
         else:
             step_fn = self.step
+        '''
+        self.scoring_function.eval()
+        test_score = evaluate.evaluate("test ", self.ranker, self.test.kb, self.eval_batch,
+                                                   verbose=self.verbose, hooks=self.hooks)
+        valid_score = evaluate.evaluate("valid", self.ranker, self.valid.kb, self.eval_batch,
+                                                    verbose=self.verbose, hooks=self.hooks)
+        self.scoring_function.train()
+        '''
         for i in range(mb_start, steps):
             l, reg, debug = step_fn()
             losses.append(l)

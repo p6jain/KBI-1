@@ -28,11 +28,11 @@ class ranker(object):
             if (fact[0], fact[1]) not in self.knowns_o:
                 self.knowns_o[(fact[0], fact[1])] = set()
             self.knowns_o[(fact[0], fact[1])].add(fact[2])
-
+            #self.knowns_o[(fact[0], fact[1])].add(fact[0])#reflexive
             if (fact[2], fact[1]) not in self.knowns_s:
                 self.knowns_s[(fact[2], fact[1])] = set()
             self.knowns_s[(fact[2], fact[1])].add(fact[0])
-
+            #self.knowns_s[(fact[2], fact[1])].add(fact[2])#reflexive
         print("converting to lists")
         for k in self.knowns_o:
             self.knowns_o[k] = list(self.knowns_o[k])
@@ -95,7 +95,7 @@ class ranker(object):
         #"""
 
 
-def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
+def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, save=0):
     """
     Evaluates an entity ranker on a knowledge base, by computing mean reverse rank, mean rank, hits 10 etc\n
     Can also print type prediction score with higher verbosity.\n
@@ -134,7 +134,9 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
         all_im = kb.get_id_iid_mapping_all(all_e)
         all_im = all_im.reshape(1,all_im.shape[0])#,1)
         all_im = torch.autograd.Variable(torch.from_numpy(all_im).cuda())
-    
+   
+
+        print("num oovs", numpy.sum(all_e>kb.nonoov_entity_count-1), len(all_e), len(all_im)) 
         all_e[all_e>kb.nonoov_entity_count-1] = kb.nonoov_entity_count-1
         all_e = all_e.reshape(1,all_e.shape[0])
         all_e = torch.autograd.Variable(torch.from_numpy(all_e).cuda())
@@ -221,25 +223,24 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None):
             for hook in hooks:
                 hook(s.data, r.data, o.data, ranks_o, top_scores_o, top_predictions_o, expected_type_o, top_predictions_type_o)
 
-            '''
-            #with open("analysis_r_e1e2_e1Type_e2Type_e1Predictede2Predicted_e1PredictedType_e2PredictedType.csv","w") as f:    
-            with open("analysis_r_e1e2_e1Predictede2Predicted_e1Ranke2Rank.csv","a") as f:
-                #writer = csv.writer(f, delimiter='\t')
-                #print(r.data.shape,s.data.shape,o.data.shape,top_predictions_s.data.shape,top_predictions_o.data.shape)
-                #print("ready")
-                #print("r",r.data.cpu().numpy())
-                #print("s",s.data.cpu().numpy())
-                #print("o",o.data.cpu().numpy()[:,0])
-                #print("top_predictions_o",top_predictions_o.data.cpu().numpy())
-                #print("top_predictions_s",top_predictions_s.data.cpu().numpy()[:,0])
-                #print("ranks_s",ranks_s.data.cpu().numpy().shape);
-                #print("ranks_s",ranks_s.data.cpu().numpy()[:]);exit()
-                for r_w,s_w,o_w,ts_w,to_w, r_s_w, r_o_w in zip(r.data.cpu().numpy()[:,0],s.data.cpu().numpy()[:,0],o.data.cpu().numpy()[:,0],top_predictions_s.data.cpu().numpy()[:,0],top_predictions_o.data.cpu().numpy()[:,0],ranks_s.data.cpu().numpy()[:],ranks_o.data.cpu().numpy()[:]):
-                    #print("##",[r_w,s_w,o_w,ts_w,to_w])
-                    f.write(("\t").join([str(ele) for ele in [r_w,s_w,o_w,ts_w,to_w,r_s_w, r_o_w]])+"\n")
-                f.flush()
-                f.close();
-             '''
+            if save:
+                #with open("analysis_r_e1e2_e1Type_e2Type_e1Predictede2Predicted_e1PredictedType_e2PredictedType.csv","w") as f:    
+                with open("analysis_r_e1e2_e1Predictede2Predicted_e1Ranke2Rank.csv","a") as f:
+                    #writer = csv.writer(f, delimiter='\t')
+                    #print(r.data.shape,s.data.shape,o.data.shape,top_predictions_s.data.shape,top_predictions_o.data.shape)
+                    #print("ready")
+                    #print("r",r.data.cpu().numpy())
+                    #print("s",s.data.cpu().numpy())
+                    #print("o",o.data.cpu().numpy()[:,0])
+                    #print("top_predictions_o",top_predictions_o.data.cpu().numpy())
+                    #print("top_predictions_s",top_predictions_s.data.cpu().numpy()[:,0])
+                    #print("ranks_s",ranks_s.data.cpu().numpy().shape);
+                    #print("ranks_s",ranks_s.data.cpu().numpy()[:]);exit()
+                    for r_w,s_w,o_w,ts_w,to_w, r_s_w, r_o_w in zip(r.data.cpu().numpy()[:,0],s.data.cpu().numpy()[:,0],o.data.cpu().numpy()[:,0],top_predictions_s.data.cpu().numpy()[:,0],top_predictions_o.data.cpu().numpy()[:,0],ranks_s.data.cpu().numpy()[:],ranks_o.data.cpu().numpy()[:]):
+                        #print("##",[r_w,s_w,o_w,ts_w,to_w])
+                        f.write(("\t").join([str(ele) for ele in [r_w,s_w,o_w,ts_w,to_w,r_s_w, r_o_w]])+"\n")
+                    f.flush()
+                    f.close();
         utils.print_progress_bar(end, facts.shape[0], "Eval on %s" % name, (("|M| mrr:%3.2f|h10:%3.2f%"
                                                                                   "%|h1:%3.2f|e1| mrr:%3.2f|h10:%3.2f%"
                                                                                   "%|h1:%3.2f|e2| mrr:%3.2f|h10:%3.2f%"

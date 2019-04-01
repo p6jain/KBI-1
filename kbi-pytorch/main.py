@@ -68,7 +68,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         print("Prachi Debug 1:", model_arguments)
         #"flag_use_image", "flag_facts_with_image","flag_reg_penalty_only_images","flag_reg_penalty_ent_prob","flag_reg_penalty_image_compat"
         ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, im_em=im_entity_map, im_rem=im_reverse_entity_map, additional_params=additional_params)#{'flag_use_image':1})
-        if introduce_oov:
+        if introduce_oov and not "<OOV>" in ktrain.entity_map.keys():
             ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
             ktrain.mid_imid_map[ktrain.entity_map["<OOV>"]] = im_entity_map["<OOV>"]
             ktrain.nonoov_entity_count = ktrain.entity_map["<OOV>"]+1          
@@ -110,8 +110,8 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         print("train size", ktrain.facts.shape)
         print("test size", ktest.facts.shape)
         print("valid size", kvalid.facts.shape)
-        print("num non-oov ent", ktrain.nonoov_entity_count)
         print("num entities", len(ktrain.entity_map))
+        print("num non-oov ent", ktrain.nonoov_entity_count)
         print("num relations", len(ktrain.relation_map))
         enm = extra_utils.entity_name_map_fine(dataset_root)
         tnm = extra_utils.type_name_map_fine(dataset_root)

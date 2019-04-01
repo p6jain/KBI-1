@@ -465,6 +465,18 @@ class typed_image_model(torch.nn.Module):
         self.bn = nn.BatchNorm1d(self.embedding_dim, momentum=0.01)
 
         image_embedding = None
+
+        print("Beta model")
+        '''
+        self.beta_head = torch.nn.Embedding(self.relation_count, 1)
+        torch.nn.init.constant_(self.beta_head.weight.data, -5.0)
+
+        self.beta_tail = torch.nn.Embedding(self.relation_count, 1)
+        torch.nn.init.constant_(self.beta_tail.weight.data, -5.0)
+
+        self.beta_img = torch.nn.Embedding(self.relation_count, 1)
+        torch.nn.init.constant_(self.beta_img.weight.data, -5.0)
+        '''
         print("IMPORTANT::TMP","added image-image compatibility!!")
     def forward(self, s, r, o, s_im, o_im, flag_debug=0):
         base_forward = self.base_model(s, r, o)
@@ -546,11 +558,12 @@ class typed_image_model(torch.nn.Module):
         '''
         #all 3 like DM
         '''
+        '''
         image_head = (s_image*r_ht*s_t).sum(dim=-1)        
         image_tail = (o_image*r_tt*o_t).sum(dim=-1)
         
         image_image = (o_image*s_image).sum(dim=-1)
-
+        '''
         image_head = torch.nn.Sigmoid()(s_image*r_ht*s_t).sum(dim=-1)        
         image_tail = torch.nn.Sigmoid()(o_image*r_tt*o_t).sum(dim=-1)
         image_image = torch.nn.Sigmoid()(o_image*s_image).sum(dim=-1)
@@ -568,8 +581,26 @@ class typed_image_model(torch.nn.Module):
         #tmp = self.mult*base_forward*head_type_compatibility*tail_type_compatibility
         #print("Prachi Debug","final type model score",tmp.shape)
         '''
-
-        score = self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.005*(image_head + image_tail + image_image))
+        '''
+        beta_head_val = self.beta_head(r).squeeze(2)
+        beta_tail_val = self.beta_tail(r)
+        beta_img_val = self.beta_img(r)
+        #print("Prachi Debug","beta_head_val",beta_head_val[:10])
+        #print("Prachi Debug","beta_tail_val",beta_tail_val[:10])
+        #print("Prachi Debug","beta_img_val",beta_img_val[:10])
+        beta_head_val = torch.nn.Sigmoid()(beta_head_val)
+        beta_tail_val = torch.nn.Sigmoid()(beta_tail_val)
+        beta_img_val = torch.nn.Sigmoid()(beta_img_val)
+        print("after")
+        print("Prachi Debug","beta_head_val",beta_head_val[:10])
+        print("Prachi Debug","beta_tail_val",beta_tail_val[:10])
+        #print("Prachi Debug","beta_img_val",beta_img_val[:10])
+        print("Prachi Debug","base_forward",base_forward[:10])
+        print("Prachi Debug","head_type_compatibility",head_type_compatibility[:10])
+        print("Prachi Debug","image_head",image_head[:10])
+        print("Prachi Debug","image_tail",image_tail[:10])
+        score = self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + (beta_head_val*image_head + beta_tail_val*image_tail))# + beta_img_val*image_image))'''
+        score = self.mult * ((base_forward * head_type_compatibility * tail_type_compatibility) + 0.005*(image_head) + 0.005*(image_tail))#2# + 0.005*(image_image)) #1
         #print("Prachi Debug","score",score.shape)
         return score
 
