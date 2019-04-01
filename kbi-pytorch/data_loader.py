@@ -74,6 +74,38 @@ class data_loader(object):
         :param negative_count: The number of negative samples for each positive fact.
         :return: A list containing s, r, o and negative s and negative o of the batch
         """
+        indexes = numpy.random.randint(0, self.kb.facts.shape[0], batch_size)
+        facts = self.kb.facts[indexes]
+        s_fwd = numpy.expand_dims(facts[:, 0], -1)
+        r_fwd = numpy.expand_dims(facts[:, 1], -1)
+        o_fwd = numpy.expand_dims(facts[:, 2], -1)
+
+        ns_fwd = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
+        no_fwd = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
+
+        num_relations = len(self.kb.relation_map)
+        r_rev = r_fwd + num_relations
+        s_rev, o_rev = o_fwd, s_fwd
+
+        s = numpy.concatenate([s_fwd, s_rev])
+        r = numpy.concatenate([r_fwd, r_rev])
+        o = numpy.concatenate([o_fwd, o_rev])       
+
+        ns = numpy.concatenate([ns_fwd, no_fwd])
+        no = numpy.concatenate([no_fwd, ns_fwd])
+        if self.first_zero:
+            ns[:, 0] = self.kb.nonoov_entity_count - 1
+            no[:, 0] = self.kb.nonoov_entity_count - 1
+
+        return [s, r, o, ns, no]
+
+    def sample_icml_old(self, batch_size=1000, negative_count=10):
+        """
+        Generates a random sample from kb and returns them as numpy arrays.\n
+        :param batch_size: The number of facts in the batch or the size of batch.
+        :param negative_count: The number of negative samples for each positive fact.
+        :return: A list containing s, r, o and negative s and negative o of the batch
+        """
         indexes = numpy.random.randint(0, self.kb.facts.shape[0]*2 , batch_size)
         indexes = indexes.reshape((indexes.shape[0],-1))
         check = indexes > (self.kb.facts.shape[0] - 1); check.astype('int');
