@@ -141,6 +141,35 @@ class complex(torch.nn.Module):
         #return ((s_re*s_re).sum()+(s_im*s_im).sum())/(2.0*denom_s)+((o_im*o_im).sum()+(o_re*o_re).sum())/(2.0*denom_o)+(r_re*r_re).mean()/3.0+(r_im*r_im).mean()/3.0
         #return ((s_re*s_re).mean()+(s_im*s_im).mean()+(o_im*o_im).mean()+(o_re*o_re).mean())/(2.0)+((r_re*r_re).mean()+(r_im*r_im).mean())/4.0
 
+    def regularizer_icml(self, s, r, o, s_wt, r_wt, o_wt):
+        s_im = self.E_im(s)
+        r_im = self.R_im(r)
+        o_im = self.E_im(o)
+        s_re = self.E_re(s)
+        r_re = self.R_re(r)
+        o_re = self.E_re(o)
+        '''
+        print("Prachi Debug","s",s_im.shape,s_wt.shape)
+        print("Prachi Debug","r",r_im.shape,r_wt.shape)
+        print("Prachi Debug","o",o_im.shape,o_wt.shape)
+        '''
+        #print("s.shape,o.shape,r.shape ",s.shape,o.shape,r.shape,s.shape[-1],o.shape[-1],r.shape[-1])
+        return (s_wt*s_re*s_re+o_wt*o_re*o_re+r_wt*r_re*r_re+s_wt*s_im*s_im+r_wt*r_im*r_im+o_wt*o_im*o_im).sum()
+
+    def regularizer_icml_orig(self, s, r, o, s_wt, r_wt, o_wt):
+        s_im = self.E_im(s)
+        r_im = self.R_im(r)
+        o_im = self.E_im(o)
+        s_re = self.E_re(s)
+        r_re = self.R_re(r)
+        o_re = self.E_re(o)
+
+        s_r = s_wt*torch.sqrt(s_re*s_re + s_im*s_im)
+        r_r = r_wt*torch.sqrt(r_re*r_re + r_im*r_im)
+        o_r = o_wt*torch.sqrt(o_re*o_re + o_im*o_im)
+        return (s_r+r_r+o_r).sum()
+
+
     def post_epoch(self):
         return ""
 

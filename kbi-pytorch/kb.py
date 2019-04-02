@@ -1,7 +1,7 @@
 import numpy
 import torch
 import re
-
+from collections import defaultdict as dd
 
 def get_image_data(dataset_root, flag_dict):
     mid_image =[]
@@ -31,6 +31,11 @@ def get_image_data(dataset_root, flag_dict):
 
    
     return mid_image, entity_subject_probs, entity_object_probs, relation_image_compat_score    
+
+def convert_to_prob(un_norm_data, total):
+    for key in un_norm_data:
+        un_norm_data[key] = (1.0*un_norm_data[key])/total
+    return un_norm_data
 
 class kb(object):
     """
@@ -66,7 +71,10 @@ class kb(object):
         self.additional_params = {} if additional_params is None else additional_params
 
         self.nonoov_entity_count = 0 if nonoov_entity_count is None else nonoov_entity_count #non-oov ent + 1 oov ent
-         
+        
+        self.entity_prob = {} 
+        self.relation_prob = {}
+             
         if filename is None:
             return
         facts = []
@@ -180,7 +188,16 @@ class kb(object):
         self.entity_id_image_matrix_np = numpy.array(entity_id_image_matrix, dtype = numpy.long)#
         entity_id_image_matrix = torch.from_numpy(numpy.array(entity_id_image_matrix))
         self.entity_id_image_matrix = entity_id_image_matrix#
-
+    
+    def augment_prob_information(self, e_p=None, r_p = None):
+        e_prob = dd(int) if e_p is None else e_p
+        r_prob = dd(int) if r_p is None else r_p
+        if e_p!=None and r_p!=None:
+            for e1,r,e2 in self.facts:
+                e_prob[e1]+=1; e_prob[e2]+=1
+                r_prob[r]+=1
+        self.e_prob = convert_to_prob(e_prob, len(self.facts)*2)
+        self.r_prob = convert_to_prob(r_prob, len(self.facts))
 
     def augment_type_information(self, mapping, enm=None, tnm=None):
         """

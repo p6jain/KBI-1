@@ -83,21 +83,31 @@ class data_loader(object):
         ns_fwd = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
         no_fwd = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
 
+        s_prob_fwd = self.get_mapping(self.kb.e_prob, s_fwd); s_prob_fwd = s_prob_fwd.astype(float)
+        o_prob_fwd = self.get_mapping(self.kb.e_prob, o_fwd); o_prob_fwd = o_prob_fwd.astype(float)
+        ns_prob_fwd = self.get_mapping(self.kb.e_prob, ns_fwd); ns_prob_fwd = ns_prob_fwd.astype(float)
+        no_prob_fwd = self.get_mapping(self.kb.e_prob, no_fwd); no_prob_fwd = no_prob_fwd.astype(float)
+        r_prob_fwd = self.get_mapping(self.kb.r_prob, r_fwd); r_prob_fwd = r_prob_fwd.astype(float)
+        ##
         num_relations = len(self.kb.relation_map)
         r_rev = r_fwd + num_relations
-        s_rev, o_rev = o_fwd, s_fwd
 
-        s = numpy.concatenate([s_fwd, s_rev])
+        s = numpy.concatenate([s_fwd, o_fwd])
         r = numpy.concatenate([r_fwd, r_rev])
-        o = numpy.concatenate([o_fwd, o_rev])       
+        o = numpy.concatenate([o_fwd, s_fwd])       
 
-        ns = numpy.concatenate([ns_fwd, no_fwd])
+        ns = numpy.concatenate([ns_fwd, no_fwd]) ##to do randomly generate ns_rev and no_rev
         no = numpy.concatenate([no_fwd, ns_fwd])
         if self.first_zero:
             ns[:, 0] = self.kb.nonoov_entity_count - 1
             no[:, 0] = self.kb.nonoov_entity_count - 1
+        s_prob = numpy.concatenate([s_prob_fwd, o_prob_fwd])
+        o_prob = numpy.concatenate([o_prob_fwd, s_prob_fwd])
+        r_prob = numpy.concatenate([r_prob_fwd, r_prob_fwd])
+        ns_prob = numpy.concatenate([ns_prob_fwd, no_prob_fwd])
+        no_prob = numpy.concatenate([no_prob_fwd, ns_prob_fwd])
 
-        return [s, r, o, ns, no]
+        return [s, r, o, ns, no, s_prob, r_prob, o_prob, ns_prob, no_prob]
 
     def sample_icml_old(self, batch_size=1000, negative_count=10):
         """

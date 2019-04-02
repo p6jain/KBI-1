@@ -26,7 +26,7 @@ class Trainer(object):
         self.optim = optim
         self.batch_size = batch_size
         self.negative_count = negative_count
-        self.ranker = evaluate.ranker(self.scoring_function, kb.union([train.kb, valid.kb, test.kb]))
+        self.ranker = evaluate.ranker(self.scoring_function, kb.union([train.kb, valid.kb, test.kb]), num_relations = len(train.kb.relation_map))
         self.eval_batch = eval_batch
         self.gradient_clip = gradient_clip
         self.regularization_coefficient = regularization_coefficient
@@ -130,7 +130,8 @@ class Trainer(object):
 
 
     def step_icml(self):
-        s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+        #s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+        s, r, o, ns, no, s_prob, r_prob, o_prob, ns_prob, no_prob = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
         if flag>9600:
@@ -144,14 +145,26 @@ class Trainer(object):
         else:
             fns = self.scoring_function(ns, r, o, flag_debug=0)
             fno = self.scoring_function(s, r, no, flag_debug=0)
+
         if self.regularization_coefficient is not None:
-            reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            s_prob = s_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            o_prob = o_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            r_prob = r_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            ns_prob = ns_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            no_prob = no_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            '''
+            print("Prachi Debug","s",s.shape,s_prob.shape)
+            print("Prachi Debug","r",r.shape,r_prob.shape)
+            print("Prachi Debug","o",o.shape,o_prob.shape)
+            print("Prachi Debug","ns",ns.shape,ns_prob.shape)
+            print("Prachi Debug","no",no.shape,no_prob.shape)'''
+            reg = self.regularizer(s, r, o, s_prob, r_prob, o_prob) + self.regularizer(ns, r, o, ns_prob, r_prob, o_prob) + self.regularizer(s, r, no, s_prob, r_prob, no_prob)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
         else:
             reg = 0
 
         loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
-
+        '''
         num_relations = len(self.train.kb.relation_map)
         r_rev = (r + num_relations)%(2*num_relations) 
         s_rev, o_rev, ns_rev, no_rev = o, s, no, ns
@@ -170,7 +183,7 @@ class Trainer(object):
             reg_rev = 0
     
         loss += self.loss(fp_rev, fns_rev, fno_rev) + self.regularization_coefficient*reg_rev
-
+        '''
         x = loss.item()
         rg = reg.item()
         self.optim.zero_grad()
@@ -363,9 +376,9 @@ class Trainer(object):
                 if count == batch_count[1]:
                     self.scoring_function.eval()
                     valid_score = evaluate.evaluate("valid", self.ranker, self.valid.kb, self.eval_batch,
-                                                    verbose=self.verbose, hooks=self.hooks)
+                                                    verbose=self.verbose, hooks=self.hooks, flag_add_reverse=self.train.flag_add_reverse)
                     test_score = evaluate.evaluate("test ", self.ranker, self.test.kb, self.eval_batch,
-                                                   verbose=self.verbose, hooks=self.hooks)
+                                                   verbose=self.verbose, hooks=self.hooks, flag_add_reverse=self.train.flag_add_reverse)
                     self.scoring_function.train()
                     count = 0
                     print()

@@ -12,7 +12,7 @@ class ranker(object):
     been seen in any kb to compute the ranking as in ####### cite paper here ########. It can be constructed
     from any scoring function/model from models.py
     """
-    def __init__(self, scoring_function, all_kb):
+    def __init__(self, scoring_function, all_kb, num_relations = None):
         """
         The initializer\n
         :param scoring_function: The model function to used to rank the entities
@@ -23,6 +23,7 @@ class ranker(object):
         self.all_kb = all_kb
         self.knowns_o = {} #o seen w/t s,r
         self.knowns_s = {} 
+        self.num_relations = num_relations
         print("building all known database from joint kb")
         for fact in self.all_kb.facts:
             if (fact[0], fact[1]) not in self.knowns_o:
@@ -94,8 +95,44 @@ class ranker(object):
         return rank, scores, score_of_expected
         #"""
 
+    def forward_icml(self, s, r, o, knowns, flag_s_o=0, s_im=None, o_im=None, all_im=None, all_e=None):
+        """
+        Returns the rank of o for the query (s, r, _) as given by the scoring function\n
+        :param s: The head of the query
+        :param r: The relation of the query
+        :param o: The Gold object of the query
+        :param knowns: The set of all o that have been seen in all_kb with (s, r, _) as given by ket_knowns above
+        :return: rank of o, score of each entity and score of the gold o
+        """
+        if not(s_im is None) and not(o_im is None):
+            if flag_s_o:
+                scores = self.scoring_function(s, r, all_e, s_im, all_im).data#
+                #scores = self.scoring_function(s, r, None, s_im, all_im).data#o_im).data
+                score_of_expected = scores.gather(1, o.data)
+            else:
+                scores = self.scoring_function(all_e, r, o, all_im, o_im).data#
+                #scores = self.scoring_function(None, r, o, all_im, o_im).data#s_im, o_im).data
+                score_of_expected = scores.gather(1, s.data)
+        else:
+            if flag_s_o:
+                scores = self.scoring_function(s, r, None).data
+                score_of_expected = scores.gather(1, o.data)
+            else:
+                #scores = self.scoring_function(None, r, o).data
+                r_rev = r + self.num_relations 
+                scores = self.scoring_function(o, r_rev, None).data
+                score_of_expected = scores.gather(1, s.data)
 
-def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, save=0):
+        #"""
+        scores.scatter_(1, knowns, self.scoring_function.minimum_value)
+        greater = scores.gt(score_of_expected).float()
+        #equal = scores.eq(score_of_expected).float()
+        rank = greater.sum(dim=1)+1  #+equal.sum(dim=1)/2.0
+        return rank, scores, score_of_expected
+        #"""
+
+
+def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, save=0, flag_add_reverse=0):
     """
     Evaluates an entity ranker on a knowledge base, by computing mean reverse rank, mean rank, hits 10 etc\n
     Can also print type prediction score with higher verbosity.\n
@@ -169,8 +206,12 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, s
             ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1, s_im=s_im, o_im=o_im, all_im=all_im, all_e=all_e)
             ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0, s_im=s_im, o_im=o_im, all_im=all_im, all_e=all_e)
         else:
-            ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
-            ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
+            if flag_add_reverse:
+                ranks_o, scores_o, score_of_expected_o = ranker.forward_icml(s, r, o, knowns_o, flag_s_o=1)
+                ranks_s, scores_s, score_of_expected_s = ranker.forward_icml(s, r, o, knowns_s, flag_s_o=0)
+            else:
+                ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
+                ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
 
         # ranks_o, scores_o, score_of_expected_o, base_o, base_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
         # ranks_s, scores_s, score_of_expected_s, base_s, base_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)

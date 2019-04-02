@@ -120,6 +120,11 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         kvalid.augment_type_information(tpm,enm,tnm)
         hooks = extra_utils.load_hooks(hooks, ktrain)
 
+    if flag_add_reverse:#data for reg
+        ktrain.augment_prob_information()
+        kvalid.augment_prob_information(e_p=ktrain.e_prob, r_p = ktrain.r_prob)#not req for reg
+        ktest.augment_prob_information(e_p=ktrain.e_prob, r_p = ktrain.r_prob)#not req for reg
+
     #if model_name == "image_model":
         #eim = extra_utils.fb15k_entity_image_map()
         #ktrain.augment_image_information(eim)
@@ -185,11 +190,18 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
                          regularization_coefficient=regularization_coefficient, verbose=verbose, model_name=model_name,
                          image_compatibility = scoring_function.image_compatibility, image_compatibility_coefficient = scoring_function.image_compatibility_coefficient)#0.01)
+    elif flag_add_reverse:
+        print("Prachi Info::", "using icml reg", "regularizer_icml_orig")#regularizer_icml
+        tr = trainer.Trainer(scoring_function, scoring_function.regularizer_icml_orig, loss, optim, dltrain, dlvalid, dltest,
+                         batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
+                         save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
+                         regularization_coefficient=regularization_coefficient, verbose=verbose)
     else:
         tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
                          regularization_coefficient=regularization_coefficient, verbose=verbose)
+
 
     if resume_from_save:
         mb_start = tr.load_state(resume_from_save)
