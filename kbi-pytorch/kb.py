@@ -34,7 +34,8 @@ def get_image_data(dataset_root, flag_dict):
 
 def convert_to_prob(un_norm_data, total):
     for key in un_norm_data:
-        un_norm_data[key] = (1.0*un_norm_data[key])/total
+        un_norm_data[key] = numpy.sqrt((1.0*un_norm_data[key])/total)
+    print("Prob wt: sqrt")
     return un_norm_data
 
 class kb(object):

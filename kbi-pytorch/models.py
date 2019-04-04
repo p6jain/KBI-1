@@ -103,10 +103,10 @@ class complex(torch.nn.Module):
         self.R_im = torch.nn.Embedding(self.relation_count, self.embedding_dim)
         self.E_re = torch.nn.Embedding(self.entity_count, self.embedding_dim)
         self.R_re = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        torch.nn.init.normal_(self.E_re.weight.data, 0, 0.05)
-        torch.nn.init.normal_(self.E_im.weight.data, 0, 0.05)
-        torch.nn.init.normal_(self.R_re.weight.data, 0, 0.05)
-        torch.nn.init.normal_(self.R_im.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.E_re.weight.data, 0, 0.1)#05)
+        torch.nn.init.normal_(self.E_im.weight.data, 0, 0.1)#05)
+        torch.nn.init.normal_(self.R_re.weight.data, 0, 0.1)#05)
+        torch.nn.init.normal_(self.R_im.weight.data, 0, 0.1)#05)
         self.minimum_value = -self.embedding_dim*self.embedding_dim
         self.clamp_v = clamp_v
     def forward(self, s, r, o, flag_debug=0):

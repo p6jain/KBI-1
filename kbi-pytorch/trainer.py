@@ -145,7 +145,6 @@ class Trainer(object):
         else:
             fns = self.scoring_function(ns, r, o, flag_debug=0)
             fno = self.scoring_function(s, r, no, flag_debug=0)
-
         if self.regularization_coefficient is not None:
             s_prob = s_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
             o_prob = o_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
@@ -161,8 +160,7 @@ class Trainer(object):
             reg = self.regularizer(s, r, o, s_prob, r_prob, o_prob) + self.regularizer(ns, r, o, ns_prob, r_prob, o_prob) + self.regularizer(s, r, no, s_prob, r_prob, no_prob)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
         else:
-            reg = 0
-
+            reg = torch.tensor([0])
         loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
         '''
         num_relations = len(self.train.kb.relation_map)
