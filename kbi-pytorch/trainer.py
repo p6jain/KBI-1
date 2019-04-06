@@ -101,13 +101,19 @@ class Trainer(object):
 
         fp = self.scoring_function(s, r, o, flag_debug=flag_debug)
         if flag_debug:
-            fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
-            fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+            #fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
+            #fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+            fns = self.scoring_function(None, r, o, flag_debug=flag_debug+1)
+            fno = self.scoring_function(s, r, None, flag_debug=flag_debug+1)
         else:
-            fns = self.scoring_function(ns, r, o, flag_debug=0)
-            fno = self.scoring_function(s, r, no, flag_debug=0)
+            #fns = self.scoring_function(ns, r, o, flag_debug=0)
+            #fno = self.scoring_function(s, r, no, flag_debug=0)
+            fns = self.scoring_function(None, r, o, flag_debug=0)
+            fno = self.scoring_function(s, r, None, flag_debug=0)
+
         if self.regularization_coefficient is not None:
-            reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            reg = self.regularizer(s, r, o) + self.regularizer(None, r, o) + self.regularizer(s, r, None)
+            #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
             #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no) + self.regularizer(ns, r, no)
         else:
@@ -140,24 +146,30 @@ class Trainer(object):
             flag_debug = 0
         fp = self.scoring_function(s, r, o, flag_debug=flag_debug)
         if flag_debug:
-            fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
-            fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+            #fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
+            #fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+            fns = self.scoring_function(None, r, o, flag_debug=flag_debug+1)
+            fno = self.scoring_function(s, r, None, flag_debug=flag_debug+1)
         else:
-            fns = self.scoring_function(ns, r, o, flag_debug=0)
-            fno = self.scoring_function(s, r, no, flag_debug=0)
+            #fns = self.scoring_function(ns, r, o, flag_debug=0)
+            #fno = self.scoring_function(s, r, no, flag_debug=0)
+            fns = self.scoring_function(None, r, o, flag_debug=0)
+            fno = self.scoring_function(s, r, None, flag_debug=0)
+
         if self.regularization_coefficient is not None:
-            s_prob = s_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
-            o_prob = o_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
-            r_prob = r_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
-            ns_prob = ns_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
-            no_prob = no_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            #s_prob = s_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            #o_prob = o_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            #r_prob = r_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            #ns_prob = ns_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
+            #no_prob = no_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
             '''
             print("Prachi Debug","s",s.shape,s_prob.shape)
             print("Prachi Debug","r",r.shape,r_prob.shape)
             print("Prachi Debug","o",o.shape,o_prob.shape)
             print("Prachi Debug","ns",ns.shape,ns_prob.shape)
             print("Prachi Debug","no",no.shape,no_prob.shape)'''
-            reg = self.regularizer(s, r, o, s_prob, r_prob, o_prob) + self.regularizer(ns, r, o, ns_prob, r_prob, o_prob) + self.regularizer(s, r, no, s_prob, r_prob, no_prob)
+            #reg = self.regularizer(s, r, o, s_prob, r_prob, o_prob) + self.regularizer(ns, r, o, ns_prob, r_prob, o_prob) + self.regularizer(s, r, no, s_prob, r_prob, no_prob)
+            reg = self.regularizer(s, r, o) + self.regularizer(None, r, o) + self.regularizer(s, r, None)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
         else:
             reg = torch.tensor([0])
