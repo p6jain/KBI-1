@@ -21,6 +21,26 @@ class softmax_loss(torch.nn.Module):
         return -losses.mean()
 
 
+class softmax_loss_reductionMean(torch.nn.Module):
+    def __init__(self):
+        super(softmax_loss_reductionMean, self).__init__()
+    def forward(self, positive, negative_1, negative_2):
+        max_den_e1 = negative_1.max(dim=1, keepdim=True)[0].detach()
+        max_den_e2 = negative_2.max(dim=1, keepdim=True)[0].detach()
+        den_e1 = (negative_1-max_den_e1).exp().mean(dim=-1, keepdim=True)
+        den_e2 = (negative_2-max_den_e2).exp().mean(dim=-1, keepdim=True)
+        losses = ((2*positive-max_den_e1-max_den_e2) - den_e1.log() - den_e2.log())
+        '''
+        print("Prachi debug","negative_1",negative_1[:10])
+        print("Prachi debug","negative_2",negative_2[:10])
+        print("Prachi debug","den_e1",den_e1[:10],den_e1.log()[:10])
+        print("Prachi debug","den_e2",den_e2[:10],den_e2.log()[:10])
+        print("Prachi debug","positive-max_den_e1",positive-max_den_e1)
+        print("Prachi debug","pos-max_den_e2",positive-max_den_e2)
+        print("Prachi debug","losses",losses)'''
+        return -losses.mean()
+
+
 class logistic_loss(torch.nn.Module):
     def __init__(self):
         super(logistic_loss, self).__init__()

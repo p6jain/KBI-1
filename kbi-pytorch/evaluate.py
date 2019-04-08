@@ -90,8 +90,9 @@ class ranker(object):
         #"""
         scores.scatter_(1, knowns, self.scoring_function.minimum_value)
         greater = scores.gt(score_of_expected).float()
-        #equal = scores.eq(score_of_expected).float()
-        rank = greater.sum(dim=1)+1  #+equal.sum(dim=1)/2.0
+        equal = scores.eq(score_of_expected).float()
+        #print("Equals", equal.sum(dim=1))
+        rank = greater.sum(dim=1)+1+equal.sum(dim=1)/2.0
         return rank, scores, score_of_expected
         #"""
 
@@ -126,8 +127,8 @@ class ranker(object):
         #"""
         scores.scatter_(1, knowns, self.scoring_function.minimum_value)
         greater = scores.gt(score_of_expected).float()
-        #equal = scores.eq(score_of_expected).float()
-        rank = greater.sum(dim=1)+1  #+equal.sum(dim=1)/2.0
+        equal = scores.eq(score_of_expected).float()
+        rank = greater.sum(dim=1)+1+equal.sum(dim=1)/2.0
         return rank, scores, score_of_expected
         #"""
 
