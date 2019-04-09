@@ -89,7 +89,49 @@ class Trainer(object):
 
         return x, rg, debug
 
-    def step(self):
+    def step(self):#_lacroix(self):
+        #s, r, o, ns, no, _, _, _ = self.train.tensor_sample(self.batch_size, self.negative_count)
+        s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
+
+        flag = random.randint(1,10001)
+        if flag>9600:
+            flag_debug = 1
+        else:
+            flag_debug = 0
+
+        if flag_debug:
+            scores_e1 = self.scoring_function(s, r, None, flag_debug=flag_debug+1)
+            scores_e2 = self.scoring_function(None, r, o, flag_debug=flag_debug+1)
+        else:
+            scores_e1 = self.scoring_function(s, r, None, flag_debug=0)
+            scores_e2 = self.scoring_function(None, r, o, flag_debug=0)
+
+        if self.regularization_coefficient is not None:
+            reg = self.regularizer(s, r, o) + self.regularizer(None, r, o) + self.regularizer(s, r, None)
+            #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
+            #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no) + self.regularizer(ns, r, no)
+        else:
+            reg = 0
+
+
+        loss = self.loss(scores_e1, o) + self.loss(scores_e2, s) + self.regularization_coefficient*reg
+
+
+        x = loss.item()
+        rg = reg.item()
+        self.optim.zero_grad()
+        loss.backward()
+        if(self.gradient_clip is not None):
+            torch.nn.utils.clip_grad_norm(self.scoring_function.parameters(), self.gradient_clip)
+        self.optim.step()
+        debug = ""
+        if "post_epoch" in dir(self.scoring_function):
+            debug = self.scoring_function.post_epoch()
+        return x, rg, debug
+
+
+    def step_back(self):
         #s, r, o, ns, no, _, _, _ = self.train.tensor_sample(self.batch_size, self.negative_count)
         s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
 
@@ -101,19 +143,19 @@ class Trainer(object):
 
         fp = self.scoring_function(s, r, o, flag_debug=flag_debug)
         if flag_debug:
-            #fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
-            #fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
-            fns = self.scoring_function(None, r, o, flag_debug=flag_debug+1)
-            fno = self.scoring_function(s, r, None, flag_debug=flag_debug+1)
+            fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
+            fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+            #fns = self.scoring_function(None, r, o, flag_debug=flag_debug+1)
+            #fno = self.scoring_function(s, r, None, flag_debug=flag_debug+1)
         else:
-            #fns = self.scoring_function(ns, r, o, flag_debug=0)
-            #fno = self.scoring_function(s, r, no, flag_debug=0)
-            fns = self.scoring_function(None, r, o, flag_debug=0)
-            fno = self.scoring_function(s, r, None, flag_debug=0)
+            fns = self.scoring_function(ns, r, o, flag_debug=0)
+            fno = self.scoring_function(s, r, no, flag_debug=0)
+            #fns = self.scoring_function(None, r, o, flag_debug=0)
+            #fno = self.scoring_function(s, r, None, flag_debug=0)
 
         if self.regularization_coefficient is not None:
-            reg = self.regularizer(s, r, o) + self.regularizer(None, r, o) + self.regularizer(s, r, None)
-            #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            #reg = self.regularizer(s, r, o) + self.regularizer(None, r, o) + self.regularizer(s, r, None)
+            reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
             #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no) + self.regularizer(ns, r, no)
         else:
