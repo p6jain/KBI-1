@@ -96,8 +96,9 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         '''
     else:
         ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map)
-        if introduce_oov:
-            ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
+        if introduce_oov: 
+            if not "<OOV>" in ktrain.entity_map.keys():
+                ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
             ktrain.nonoov_entity_count = ktrain.entity_map["<OOV>"]+1
         ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
                    rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
