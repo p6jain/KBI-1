@@ -1,18 +1,21 @@
 import torch
+import torch.nn as nn
 
 class crossentropy_loss(torch.nn.Module):
     def __init__(self):
         super(crossentropy_loss, self).__init__()
-        loss = nn.CrossEntropyLoss(reduction = 'mean')
+        self.name = "crossentropy_loss"
+        self.loss = nn.CrossEntropyLoss(reduction = 'mean')
     def forward(self, scores, ans):
+        ans = ans.view(ans.shape[0])
         losses = self.loss(scores, ans)
-
         return losses
 
 
 class softmax_loss(torch.nn.Module):
     def __init__(self):
         super(softmax_loss, self).__init__()
+        self.name = "softmax_loss"
     def forward(self, positive, negative_1, negative_2):
         max_den_e1 = negative_1.max(dim=1, keepdim=True)[0].detach()
         max_den_e2 = negative_2.max(dim=1, keepdim=True)[0].detach()
@@ -33,6 +36,7 @@ class softmax_loss(torch.nn.Module):
 class softmax_loss_reductionMean(torch.nn.Module):
     def __init__(self):
         super(softmax_loss_reductionMean, self).__init__()
+        self.name = "softmax_loss_reductionMean"
     def forward(self, positive, negative_1, negative_2):
         max_den_e1 = negative_1.max(dim=1, keepdim=True)[0].detach()
         max_den_e2 = negative_2.max(dim=1, keepdim=True)[0].detach()
@@ -45,6 +49,7 @@ class softmax_loss_reductionMean(torch.nn.Module):
 class logistic_loss(torch.nn.Module):
     def __init__(self):
         super(logistic_loss, self).__init__()
+        self.name = "logistic_loss"
     def forward(self, positive, negative_1, negative_2):
         scores = torch.cat([positive, negative_1, negative_2], dim=-1)
         truth = torch.ones(1, positive.shape[1]+negative_1.shape[1]+negative_2.shape[1]).cuda()

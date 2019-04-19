@@ -135,11 +135,6 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         #kvalid.augment_image_information(eim)
         #print("Prachi Debug::","5")
 
-    dltrain = data_loader.data_loader(ktrain, has_cuda, flag_add_reverse=flag_add_reverse)
-    dlvalid = data_loader.data_loader(kvalid, has_cuda, flag_add_reverse=flag_add_reverse)
-    dltest = data_loader.data_loader(ktest, has_cuda, flag_add_reverse=flag_add_reverse)
-
-
     if introduce_oov:
         model_arguments['entity_count'] = ktrain.entity_map["<OOV>"] + 1#len(ktrain.entity_map)
     else:
@@ -148,6 +143,12 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         model_arguments['relation_count'] = len(ktrain.relation_map)*2
     else:
         model_arguments['relation_count'] = len(ktrain.relation_map)
+
+    dltrain = data_loader.data_loader(ktrain, has_cuda, flag_add_reverse=flag_add_reverse, loss=loss_function, num_entity = model_arguments['entity_count'])
+    dlvalid = data_loader.data_loader(kvalid, has_cuda, flag_add_reverse=flag_add_reverse, loss=loss_function, num_entity = model_arguments['entity_count'])
+    dltest = data_loader.data_loader(ktest, has_cuda, flag_add_reverse=flag_add_reverse, loss=loss_function, num_entity = model_arguments['entity_count'])
+
+
 
     '''
     if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model" or model_name =="typed_image_model_reg":

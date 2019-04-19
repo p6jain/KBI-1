@@ -12,7 +12,7 @@ class data_loader(object):
     """
     Does th job of batching a knowledge base and also generates negative samples with it.
     """
-    def __init__(self, kb, load_to_gpu, first_zero=True, flag_add_reverse=None):
+    def __init__(self, kb, load_to_gpu, first_zero=True, flag_add_reverse=None, loss=None, num_entity=None):
         """
         Duh..\n
         :param kb: the knowledge base to batch
@@ -23,12 +23,15 @@ class data_loader(object):
         self.load_to_gpu = load_to_gpu
         self.first_zero = first_zero
         self.flag_add_reverse = flag_add_reverse
+        self.loss = loss
+        self.num_entity = num_entity
 
     def get_mapping(self, mapping,data):
         keys, inv = numpy.unique(data, return_inverse=True)
         vals = numpy.array([mapping[key] for key in keys])
         result = vals[inv]
         return result.reshape(data.shape)
+
 
     def sample(self, batch_size=1000, negative_count=10):
         """
@@ -42,12 +45,14 @@ class data_loader(object):
         s = numpy.expand_dims(facts[:, 0], -1)
         r = numpy.expand_dims(facts[:, 1], -1)
         o = numpy.expand_dims(facts[:, 2], -1)
-
-        ns = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
-        no = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
-        if self.first_zero:
-            ns[:, 0] = self.kb.nonoov_entity_count-1
-            no[:, 0] = self.kb.nonoov_entity_count-1
+        if self.loss == "crossentropy_loss":
+            ns = None; no = None
+        else:
+            ns = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
+            no = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
+            if self.first_zero:
+                ns[:, 0] = self.kb.nonoov_entity_count-1
+                no[:, 0] = self.kb.nonoov_entity_count-1
         if self.kb.additional_params["flag_use_image"]:#self.kb.use_image:
             #s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
             #o_image = numpy.array(self.kb.entity_id_image_matrix[o]).squeeze(1)
@@ -61,7 +66,7 @@ class data_loader(object):
             ic_r_score = numpy.expand_dims(facts[:, 7], -1)
             ic_r_score = ic_r_score.astype(float)
 
-            ns_im = self.get_mapping(self.kb.mid_imid_map, ns) ##handle mid to image-id mapping here!!!
+            ns_im = self.get_mapping(self.kb.mid_imid_map, ns) ##handle mid to image-id mapping here!!! #WILL NOT WORK FOR CE Loss
             no_im = self.get_mapping(self.kb.mid_imid_map, no)
             return [s, r, o, ns, no, s_im, o_im, ns_im, no_im, s_oov, o_oov, ic_r_score]
         else:
@@ -80,13 +85,19 @@ class data_loader(object):
         r_fwd = numpy.expand_dims(facts[:, 1], -1)
         o_fwd = numpy.expand_dims(facts[:, 2], -1)
 
-        ns_fwd = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
-        no_fwd = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
+        if self.loss == "crossentropy_loss":
+            ns_fwd = None; no_fwd = None
+        else:
+            ns_fwd = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
+            no_fwd = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))
 
         s_prob_fwd = self.get_mapping(self.kb.e_prob, s_fwd); s_prob_fwd = s_prob_fwd.astype(float)
         o_prob_fwd = self.get_mapping(self.kb.e_prob, o_fwd); o_prob_fwd = o_prob_fwd.astype(float)
-        ns_prob_fwd = self.get_mapping(self.kb.e_prob, ns_fwd); ns_prob_fwd = ns_prob_fwd.astype(float)
-        no_prob_fwd = self.get_mapping(self.kb.e_prob, no_fwd); no_prob_fwd = no_prob_fwd.astype(float)
+        if self.loss == "crossentropy_loss":
+            ns_prob_fwd = None; no_prob_fwd = None
+        else:
+            ns_prob_fwd = self.get_mapping(self.kb.e_prob, ns_fwd); ns_prob_fwd = ns_prob_fwd.astype(float)
+            no_prob_fwd = self.get_mapping(self.kb.e_prob, no_fwd); no_prob_fwd = no_prob_fwd.astype(float)
         r_prob_fwd = self.get_mapping(self.kb.r_prob, r_fwd); r_prob_fwd = r_prob_fwd.astype(float)
         ##
         num_relations = len(self.kb.relation_map)
@@ -96,16 +107,23 @@ class data_loader(object):
         r = numpy.concatenate([r_fwd, r_rev])
         o = numpy.concatenate([o_fwd, s_fwd])       
 
-        ns = numpy.concatenate([ns_fwd, no_fwd]) ##to do randomly generate ns_rev and no_rev
-        no = numpy.concatenate([no_fwd, ns_fwd])
-        if self.first_zero:
-            ns[:, 0] = self.kb.nonoov_entity_count - 1
-            no[:, 0] = self.kb.nonoov_entity_count - 1
+        if self.loss == "crossentropy_loss":
+            ns = None; no = None
+        else:
+            ns = numpy.concatenate([ns_fwd, no_fwd]) ##to do randomly generate ns_rev and no_rev
+            no = numpy.concatenate([no_fwd, ns_fwd])
+    
+            if self.first_zero:
+                ns[:, 0] = self.kb.nonoov_entity_count - 1
+                no[:, 0] = self.kb.nonoov_entity_count - 1
         s_prob = numpy.concatenate([s_prob_fwd, o_prob_fwd])
         o_prob = numpy.concatenate([o_prob_fwd, s_prob_fwd])
         r_prob = numpy.concatenate([r_prob_fwd, r_prob_fwd])
-        ns_prob = numpy.concatenate([ns_prob_fwd, no_prob_fwd])
-        no_prob = numpy.concatenate([no_prob_fwd, ns_prob_fwd])
+        if self.loss == "crossentropy_loss":
+            ns_prob = None; no_prob = None
+        else:
+            ns_prob = numpy.concatenate([ns_prob_fwd, no_prob_fwd])
+            no_prob = numpy.concatenate([no_prob_fwd, ns_prob_fwd])
 
         return [s, r, o, ns, no, s_prob, r_prob, o_prob, ns_prob, no_prob]
 
@@ -213,6 +231,12 @@ class data_loader(object):
         else:
             ls = self.sample(batch_size, negative_count)
         if self.load_to_gpu:
-            return [torch.autograd.Variable(torch.from_numpy(x).cuda()) for x in ls]
+            '''
+            for i,ele in enumerate(ls):
+                print(type(ele))
+                print(sum(int(ele!=None)))
+                print(i)
+            print("Done")'''
+            return [None if x is None else torch.autograd.Variable(torch.from_numpy(x).cuda()) for x in ls]
         else:
-            return [torch.autograd.Variable(torch.from_numpy(x)) for x in ls]
+            return [None if x is None else torch.autograd.Variable(torch.from_numpy(x)) for x in ls]

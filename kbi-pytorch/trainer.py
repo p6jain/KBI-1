@@ -145,23 +145,20 @@ class Trainer(object):
         if flag_debug:
             fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
             fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
-            #fns = self.scoring_function(None, r, o, flag_debug=flag_debug+1)
-            #fno = self.scoring_function(s, r, None, flag_debug=flag_debug+1)
         else:
             fns = self.scoring_function(ns, r, o, flag_debug=0)
             fno = self.scoring_function(s, r, no, flag_debug=0)
-            #fns = self.scoring_function(None, r, o, flag_debug=0)
-            #fno = self.scoring_function(s, r, None, flag_debug=0)
 
         if self.regularization_coefficient is not None:
-            #reg = self.regularizer(s, r, o) + self.regularizer(None, r, o) + self.regularizer(s, r, None)
             reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
-            #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no) + self.regularizer(ns, r, no)
         else:
             reg = 0
 
-        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
+        if self.loss.name == "crossentropy_loss":
+            loss = self.loss(fno, o) + self.loss(fns, s) + self.regularization_coefficient*reg
+        else:
+            loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
 
         x = loss.item()
         rg = reg.item()
@@ -176,7 +173,6 @@ class Trainer(object):
         return x, rg, debug
 
 
-
     def step_icml(self):
         #s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
         s, r, o, ns, no, s_prob, r_prob, o_prob, ns_prob, no_prob = self.train.tensor_sample(self.batch_size, self.negative_count)
@@ -189,14 +185,10 @@ class Trainer(object):
         fp = self.scoring_function(s, r, o, flag_debug=flag_debug)
         if flag_debug:
             #fns = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
-            #fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
-            fns = self.scoring_function(None, r, o, flag_debug=flag_debug+1)
-            fno = self.scoring_function(s, r, None, flag_debug=flag_debug+1)
+            fno = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
         else:
             #fns = self.scoring_function(ns, r, o, flag_debug=0)
-            #fno = self.scoring_function(s, r, no, flag_debug=0)
-            fns = self.scoring_function(None, r, o, flag_debug=0)
-            fno = self.scoring_function(s, r, None, flag_debug=0)
+            fno = self.scoring_function(s, r, no, flag_debug=0)
 
         if self.regularization_coefficient is not None:
             #s_prob = s_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
@@ -211,31 +203,20 @@ class Trainer(object):
             print("Prachi Debug","ns",ns.shape,ns_prob.shape)
             print("Prachi Debug","no",no.shape,no_prob.shape)'''
             #reg = self.regularizer(s, r, o, s_prob, r_prob, o_prob) + self.regularizer(ns, r, o, ns_prob, r_prob, o_prob) + self.regularizer(s, r, no, s_prob, r_prob, no_prob)
-            reg = self.regularizer(s, r, o) + self.regularizer(None, r, o) + self.regularizer(s, r, None)
-            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
+            reg = self.regularizer(s, r, o) + self.regularizer(s, r, no)#self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            #reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
+            if no is None:
+                reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1 + 1*self.train.num_entity))
+            else:
+                reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1 + 1*self.negative_count))
         else:
             reg = torch.tensor([0])
-        loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
-        '''
-        num_relations = len(self.train.kb.relation_map)
-        r_rev = (r + num_relations)%(2*num_relations) 
-        s_rev, o_rev, ns_rev, no_rev = o, s, no, ns
 
-        fp_rev = self.scoring_function(s_rev, r_rev, o_rev, flag_debug=flag_debug)
-        if flag_debug:
-            fns_rev = self.scoring_function(ns_rev, r_rev, o_rev, flag_debug=flag_debug+1)
-            fno_rev = self.scoring_function(s_rev, r_rev, no_rev, flag_debug=flag_debug+1)
+        if self.loss.name == "crossentropy_loss":
+            loss = self.loss(fno, o) + self.regularization_coefficient*reg #self.loss(fns, s) + self.regularization_coefficient*reg
         else:
-            fns_rev = self.scoring_function(ns_rev, r_rev, o_rev, flag_debug=0)
-            fno_rev = self.scoring_function(s_rev, r_rev, no_rev, flag_debug=0)
-        if self.regularization_coefficient is not None:
-            reg_rev = self.regularizer(s_rev, r_rev, o_rev) + self.regularizer(ns_rev, r_rev, o_rev) + self.regularizer(s_rev, r_rev, no_rev)
-            reg_rev = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
-        else:
-            reg_rev = 0
-    
-        loss += self.loss(fp_rev, fns_rev, fno_rev) + self.regularization_coefficient*reg_rev
-        '''
+            loss = self.loss(fp, fns, fno) + self.regularization_coefficient*reg
+
         x = loss.item()
         rg = reg.item()
         self.optim.zero_grad()
