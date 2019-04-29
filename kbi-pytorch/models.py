@@ -99,16 +99,24 @@ class complex(torch.nn.Module):
         self.entity_count = entity_count
         self.embedding_dim = embedding_dim
         self.relation_count = relation_count
-        self.E_im = torch.nn.Embedding(self.entity_count, self.embedding_dim)
-        self.R_im = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        self.E_re = torch.nn.Embedding(self.entity_count, self.embedding_dim)
-        self.R_re = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.E_im = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
+        self.R_im = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
+        self.E_re = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
+        self.R_re = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
+        
         torch.nn.init.normal_(self.E_re.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.E_im.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_re.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_im.weight.data, 0, 0.05)
+        '''
+        self.E_im.weight.data *= 1e-3
+        self.R_im.weight.data *= 1e-3
+        self.E_re.weight.data *= 1e-3
+        self.R_re.weight.data *= 1e-3
+        '''
         self.minimum_value = -self.embedding_dim*self.embedding_dim
         self.clamp_v = clamp_v
+
     def forward(self, s, r, o, flag_debug=0):
         s_im = self.E_im(s) if s is not None else self.E_im.weight.unsqueeze(0)
         r_im = self.R_im(r)
@@ -116,7 +124,7 @@ class complex(torch.nn.Module):
         s_re = self.E_re(s) if s is not None else self.E_re.weight.unsqueeze(0)
         r_re = self.R_re(r)
         o_re = self.E_re(o) if o is not None else self.E_re.weight.unsqueeze(0)
-        
+        '''
         if self.clamp_v:
             s_im.data.clamp_(-self.clamp_v, self.clamp_v)
             s_re.data.clamp_(-self.clamp_v, self.clamp_v)
@@ -124,8 +132,28 @@ class complex(torch.nn.Module):
             r_re.data.clamp_(-self.clamp_v, self.clamp_v)
             o_im.data.clamp_(-self.clamp_v, self.clamp_v)
             o_re.data.clamp_(-self.clamp_v, self.clamp_v)
-        result = (s_re*o_re+s_im*o_im)*r_re + (s_re*o_im-s_im*o_re)*r_im
-        return result.sum(dim=-1)
+        '''
+        if o is None:
+            x = s_im*r_re
+            y = (s_im*r_re+s_re*r_im) * o_im
+            #print("Prachi Debug", "s_im", s_im.shape, "s_im*r_re", x.shape, "o_im", o_im.shape, "(s_im*r_re+s_re*r_im) @ o_im", y.shape)
+            tmp1 = (s_im*r_re+s_re*r_im); tmp1 = tmp1.view(-1,self.embedding_dim)
+            tmp2 = (s_re*r_re-s_im*r_im); tmp2 = tmp2.view(-1,self.embedding_dim)
+            o_re = o_re.view(-1,self.embedding_dim).transpose(0,1)
+            o_im = o_im.view(-1,self.embedding_dim).transpose(0,1)
+            result = tmp1 @ o_im + tmp2 @o_re #(s_im*r_re+s_re*r_im) @ o_im + (s_re*r_re-s_im*r_im) @ o_re
+            return result
+        else:
+            #result = s_im*(o_im*r_re-o_re*r_im) + s_re*(o_im*r_im+o_re*r_re) 
+            tmp1 = o_im*r_re-o_re*r_im; tmp1 = tmp1.view(-1,self.embedding_dim)
+            tmp2 = o_im*r_im+o_re*r_re; tmp2 = tmp2.view(-1,self.embedding_dim)
+            s_im = s_im.view(-1,self.embedding_dim).transpose(0,1)
+            s_re = s_re.view(-1,self.embedding_dim).transpose(0,1) 
+            result = tmp1 @ s_im + tmp2 @ s_re
+        #result = (s_re*o_re+s_im*o_im)*r_re + (s_re*o_im-s_im*o_re)*r_im
+        #result = o_im*(s_im*r_re+s_re*r_im) + o_re*(s_re*r_re-s_im*r_im)
+            #return result.sum(dim=-1)
+
 
     def regularizer(self, s, r, o):
         s_im = self.E_im(s) if s is not None else self.E_im.weight.unsqueeze(0)
@@ -135,13 +163,14 @@ class complex(torch.nn.Module):
         r_re = self.R_re(r)
         o_re = self.E_re(o) if o is not None else self.E_im.weight.unsqueeze(0)
         #print("s.shape,o.shape,r.shape ",s.shape,o.shape,r.shape,s.shape[-1],o.shape[-1],r.shape[-1])
-        return (s_re*s_re+o_re*o_re+r_re*r_re+s_im*s_im+r_im*r_im+o_im*o_im).sum()
+        #return (s_re*s_re+o_re*o_re+r_re*r_re+s_im*s_im+r_im*r_im+o_im*o_im).sum()
+        return (s_re**2+o_re**2+r_re**2+s_im**2+r_im**2+o_im**2).sum()
         #denom_s = r.shape[0] * self.embedding_dim * s.shape[-1]
         #denom_o = r.shape[0] * self.embedding_dim * o.shape[-1]
         #return ((s_re*s_re).sum()+(s_im*s_im).sum())/(2.0*denom_s)+((o_im*o_im).sum()+(o_re*o_re).sum())/(2.0*denom_o)+(r_re*r_re).mean()/3.0+(r_im*r_im).mean()/3.0
         #return ((s_re*s_re).mean()+(s_im*s_im).mean()+(o_im*o_im).mean()+(o_re*o_re).mean())/(2.0)+((r_re*r_re).mean()+(r_im*r_im).mean())/4.0
 
-    def regularizer_icml(self, s, r, o, s_wt, r_wt, o_wt):
+    def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
         s_im = self.E_im(s)
         r_im = self.R_im(r)
         o_im = self.E_im(o)
@@ -154,7 +183,15 @@ class complex(torch.nn.Module):
         print("Prachi Debug","o",o_im.shape,o_wt.shape)
         '''
         #print("s.shape,o.shape,r.shape ",s.shape,o.shape,r.shape,s.shape[-1],o.shape[-1],r.shape[-1])
-        return (s_wt*s_re*s_re+o_wt*o_re*o_re+r_wt*r_re*r_re+s_wt*s_im*s_im+r_wt*r_im*r_im+o_wt*o_im*o_im).sum()
+        factor = [torch.sqrt(s_re**2 + s_im**2),torch.sqrt(o_re**2+o_im**2),torch.sqrt(r_re**2+r_im**2)]
+        reg = 0
+        for ele in factor:
+            reg += torch.sum(torch.abs(ele) ** 3)
+
+        #print("Prachi Debug","reg",reg.shape, reg, s.shape, reg/s.shape[0])
+        #print("Prachi Debug","ele",ele.shape)
+        return reg/s.shape[0]
+        #(s_wt*s_re*s_re+o_wt*o_re*o_re+r_wt*r_re*r_re+s_wt*s_im*s_im+r_wt*r_im*r_im+o_wt*o_im*o_im).sum()
 
     def regularizer_icml_orig(self, s, r, o, s_wt, r_wt, o_wt):
         s_im = self.E_im(s)

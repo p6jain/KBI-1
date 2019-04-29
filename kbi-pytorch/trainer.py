@@ -10,7 +10,7 @@ import os
 class Trainer(object):
     def __init__(self, scoring_function, regularizer, loss, optim, train, valid, test, verbose=0, batch_size=1000,
                  hooks=None , eval_batch=100, negative_count=10, gradient_clip=None, regularization_coefficient=0.01,
-                 save_dir="./logs", model_name = None, image_compatibility = None, image_compatibility_coefficient = 0.01):
+                 save_dir="./logs", model_name = None, image_compatibility = None, image_compatibility_coefficient = 0.01, scheduler=None):
         super(Trainer, self).__init__()
         self.model_name = model_name
 
@@ -36,6 +36,8 @@ class Trainer(object):
                                           "valid_e1":{"mrr":0.0}, "test_e1":{"mrr":0.0}}#{"valid":{"mrr":0.0}}
         self.verbose = verbose
         self.hooks = hooks if hooks else []
+
+        self.scheduler = scheduler
 
     def step_neg_sens_2step(self):
         s, r, o, ns, no, ns2, no2 = self.train.tensor_sample(self.batch_size, self.negative_count)
@@ -190,7 +192,8 @@ class Trainer(object):
             #fns = self.scoring_function(ns, r, o, flag_debug=0)
             fno = self.scoring_function(s, r, no, flag_debug=0)
 
-        if self.regularization_coefficient is not None:
+        
+        if 1:#self.regularization_coefficient is not None:
             #s_prob = s_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
             #o_prob = o_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
             #r_prob = r_prob.type(torch.cuda.FloatTensor).unsqueeze(-1)
@@ -203,15 +206,15 @@ class Trainer(object):
             print("Prachi Debug","ns",ns.shape,ns_prob.shape)
             print("Prachi Debug","no",no.shape,no_prob.shape)'''
             #reg = self.regularizer(s, r, o, s_prob, r_prob, o_prob) + self.regularizer(ns, r, o, ns_prob, r_prob, o_prob) + self.regularizer(s, r, no, s_prob, r_prob, no_prob)
-            reg = self.regularizer(s, r, o) + self.regularizer(s, r, no)#self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            reg = self.regularizer(s, r, o) #+ self.regularizer(s, r, no)#self.regularizer(ns, r, o) + self.regularizer(s, r, no)
             #reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
             if no is None:
-                reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1 + 1*self.train.num_entity))
+                reg = reg/(self.batch_size*self.scoring_function.embedding_dim)#*(1 + 1*self.train.num_entity))
             else:
                 reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1 + 1*self.negative_count))
         else:
-            reg = torch.tensor([0])
-
+            reg = 0#torch.tensor([0])
+        
         if self.loss.name == "crossentropy_loss":
             loss = self.loss(fno, o) + self.regularization_coefficient*reg #self.loss(fns, s) + self.regularization_coefficient*reg
         else:
@@ -413,6 +416,7 @@ class Trainer(object):
                     test_score = evaluate.evaluate("test ", self.ranker, self.test.kb, self.eval_batch,
                                                    verbose=self.verbose, hooks=self.hooks, flag_add_reverse=self.train.flag_add_reverse)
                     self.scoring_function.train()
+                    self.scheduler.step(valid_score['m']['mrr']) #Scheduler to manage learning rate added
                     count = 0
                     print()
                     self.save_state(i, valid_score, test_score)

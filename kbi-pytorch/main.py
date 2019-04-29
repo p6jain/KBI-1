@@ -21,6 +21,7 @@ import numpy
 import re
 import sys
 import pickle
+import torch.optim.lr_scheduler as lr_scheduler 
 
 has_cuda = torch.cuda.is_available()
 if not has_cuda:
@@ -30,6 +31,8 @@ if not has_cuda:
 def main(dataset_root, save_dir, model_name, model_arguments, loss_function, learning_rate, batch_size,
          regularization_coefficient, gradient_clip, optimizer_name, max_epochs, negative_sample_count, hooks,
          eval_every_x_mini_batches, eval_batch_size, resume_from_save, introduce_oov, verbose):
+
+    print("Prachi Debug!!", "Using LR scheduler")
 
     flag_add_reverse = 1 if re.search("_icml", model_name) else 0
     model_name = model_name.split("_icml")[0]
@@ -182,6 +185,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         scoring_function = scoring_function.cuda()
     loss = getattr(losses, loss_function)()
     optim = getattr(torch.optim, optimizer_name)(scoring_function.parameters(), lr=learning_rate)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optim, 'max', patience = 2, verbose=True)#mrr tracking 
 
     if(not eval_batch_size):
         eval_batch_size = max(50, batch_size*2*negative_sample_count//len(ktrain.entity_map))
@@ -191,18 +195,18 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
                          regularization_coefficient=regularization_coefficient, verbose=verbose, model_name=model_name,
-                         image_compatibility = scoring_function.image_compatibility, image_compatibility_coefficient = scoring_function.image_compatibility_coefficient)#0.01)
+                         image_compatibility = scoring_function.image_compatibility, image_compatibility_coefficient = scoring_function.image_compatibility_coefficient, scheduler=scheduler)#0.01)
     elif flag_add_reverse:
         print("Prachi Info::", "using icml reg", "regularizer")#"regularizer_icml")#regularizer_icml_orig
         tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
-                         regularization_coefficient=regularization_coefficient, verbose=verbose)
+                         regularization_coefficient=regularization_coefficient, verbose=verbose, scheduler=scheduler)
     else:
         tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
-                         regularization_coefficient=regularization_coefficient, verbose=verbose)
+                         regularization_coefficient=regularization_coefficient, verbose=verbose, scheduler=scheduler)
 
 
     if resume_from_save:
