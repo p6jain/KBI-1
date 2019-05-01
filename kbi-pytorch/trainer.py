@@ -102,23 +102,28 @@ class Trainer(object):
             flag_debug = 0
 
         if flag_debug:
-            scores_e1 = self.scoring_function(s, r, None, flag_debug=flag_debug+1)
-            scores_e2 = self.scoring_function(None, r, o, flag_debug=flag_debug+1)
+            scores_e1 = self.scoring_function(s, r, no, flag_debug=flag_debug+1)
+            scores_e2 = self.scoring_function(ns, r, o, flag_debug=flag_debug+1)
         else:
-            scores_e1 = self.scoring_function(s, r, None, flag_debug=0)
-            scores_e2 = self.scoring_function(None, r, o, flag_debug=0)
+            scores_e1 = self.scoring_function(s, r, no, flag_debug=0)
+            scores_e2 = self.scoring_function(ns, r, o, flag_debug=0)
 
         if self.regularization_coefficient is not None:
-            reg = self.regularizer(s, r, o) + self.regularizer(None, r, o) + self.regularizer(s, r, None)
+            reg = self.regularizer(s, r, o) #+ self.regularizer(None, r, o) + self.regularizer(s, r, None)
             #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
-            reg = reg/(self.batch_size*self.scoring_function.embedding_dim*(1+2*self.negative_count))
+            reg = reg/(self.batch_size*self.scoring_function.embedding_dim)#*(1+2*self.negative_count))
             #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no) + self.regularizer(ns, r, no)
         else:
             reg = 0
 
 
-        loss = self.loss(scores_e1, o) + self.loss(scores_e2, s) + self.regularization_coefficient*reg
+        if self.loss.name == "crossentropy_loss":
+            loss = self.loss(scores_e1, o) + self.loss(scores_e2, s) + self.regularization_coefficient*reg
+        else:
+            loss = self.loss(fp, scores_e2, scores_e1) + self.regularization_coefficient*reg
 
+
+        #loss = self.loss(scores_e1, o) + self.loss(scores_e2, s) + self.regularization_coefficient*reg
 
         x = loss.item()
         rg = reg.item()

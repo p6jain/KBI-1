@@ -144,6 +144,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
         model_arguments['entity_count'] = len(ktrain.entity_map)
     if flag_add_reverse:
         model_arguments['relation_count'] = len(ktrain.relation_map)*2
+        model_arguments['flag_add_reverse'] = flag_add_reverse
     else:
         model_arguments['relation_count'] = len(ktrain.relation_map)
 

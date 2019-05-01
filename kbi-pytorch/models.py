@@ -11,7 +11,7 @@ class distmult(torch.nn.Module):
     DistMult Model from Trullion et al 2014.\n
     Scoring function (s, r, o) = <s, r, o> # dot product
     """
-    def __init__(self, entity_count, relation_count, embedding_dim, unit_reg=False, clamp_v=None, display_norms=False, reg=2):
+    def __init__(self, entity_count, relation_count, embedding_dim, unit_reg=False, clamp_v=None, display_norms=False, reg=2, flag_add_reverse=0):
         """
         The initializing function. These parameters are expected to be supplied from the command line when running the\n
         program from main.\n
@@ -94,7 +94,7 @@ class distmult(torch.nn.Module):
 
 
 class complex(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, clamp_v=None):
+    def __init__(self, entity_count, relation_count, embedding_dim, clamp_v=None, flag_add_reverse=0):
         super(complex, self).__init__()
         self.entity_count = entity_count
         self.embedding_dim = embedding_dim
@@ -103,7 +103,7 @@ class complex(torch.nn.Module):
         self.R_im = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
         self.E_re = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
         self.R_re = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
-        
+        '''
         torch.nn.init.normal_(self.E_re.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.E_im.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_re.weight.data, 0, 0.05)
@@ -113,7 +113,7 @@ class complex(torch.nn.Module):
         self.R_im.weight.data *= 1e-3
         self.E_re.weight.data *= 1e-3
         self.R_re.weight.data *= 1e-3
-        '''
+        #'''
         self.minimum_value = -self.embedding_dim*self.embedding_dim
         self.clamp_v = clamp_v
 
@@ -134,22 +134,38 @@ class complex(torch.nn.Module):
             o_re.data.clamp_(-self.clamp_v, self.clamp_v)
         '''
         if o is None:
-            x = s_im*r_re
-            y = (s_im*r_re+s_re*r_im) * o_im
-            #print("Prachi Debug", "s_im", s_im.shape, "s_im*r_re", x.shape, "o_im", o_im.shape, "(s_im*r_re+s_re*r_im) @ o_im", y.shape)
+            #x = s_im*r_re
+            #y = (s_im*r_re+s_re*r_im) * o_im
+            #print("Part 1")
+            #print("Prachi Debug", "s_im", s_im.shape, "s_im*r_re", x.shape, "o_im", o_im.shape, "(s_im*r_re+s_re*r_im) * o_im", y.shape, y.sum(dim=-1).shape)
             tmp1 = (s_im*r_re+s_re*r_im); tmp1 = tmp1.view(-1,self.embedding_dim)
             tmp2 = (s_re*r_re-s_im*r_im); tmp2 = tmp2.view(-1,self.embedding_dim)
             o_re = o_re.view(-1,self.embedding_dim).transpose(0,1)
             o_im = o_im.view(-1,self.embedding_dim).transpose(0,1)
             result = tmp1 @ o_im + tmp2 @o_re #(s_im*r_re+s_re*r_im) @ o_im + (s_re*r_re-s_im*r_im) @ o_re
-            return result
+            #print("Prachi Debug", "result", result.shape)
+            #print("End\n\n")
+            #return result
         else:
             #result = s_im*(o_im*r_re-o_re*r_im) + s_re*(o_im*r_im+o_re*r_re) 
+            #x = o_im*r_re
+            #y = (o_im*r_re-o_re*r_im) * s_im
+            #print("Part 2")
+            #print("Prachi Debug", "o_im", o_im.shape, "o_im*r_re", x.shape, "s_im", s_im.shape, "(o_im*r_re-o_re*r_im) * s_im", y.shape, y.sum(dim=-1).shape)
+
             tmp1 = o_im*r_re-o_re*r_im; tmp1 = tmp1.view(-1,self.embedding_dim)
             tmp2 = o_im*r_im+o_re*r_re; tmp2 = tmp2.view(-1,self.embedding_dim)
             s_im = s_im.view(-1,self.embedding_dim).transpose(0,1)
             s_re = s_re.view(-1,self.embedding_dim).transpose(0,1) 
             result = tmp1 @ s_im + tmp2 @ s_re
+    
+            #print("Prachi Debug", "result", result.shape)
+            #print("End\n\n")
+
+        #print("@Prachi Debug", "result",result[0])
+        #print("@Prachi Debug", "result",y.sum(dim=-1)[0])
+
+        return result
         #result = (s_re*o_re+s_im*o_im)*r_re + (s_re*o_im-s_im*o_re)*r_im
         #result = o_im*(s_im*r_re+s_re*r_im) + o_re*(s_re*r_re-s_im*r_im)
             #return result.sum(dim=-1)
@@ -212,7 +228,7 @@ class complex(torch.nn.Module):
 
 
 class adder_model(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, model1_name, model1_arguments, model2_name, model2_arguments):
+    def __init__(self, entity_count, relation_count, model1_name, model1_arguments, model2_name, model2_arguments, flag_add_reverse=0):
         super(adder_model, self).__init__()
 
         model1 = globals()[model1_name]
@@ -237,7 +253,7 @@ class adder_model(torch.nn.Module):
 
 
 class typed_model(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0):
         super(typed_model, self).__init__()
 
         base_model_class = globals()[base_model_name]
@@ -247,7 +263,10 @@ class typed_model(torch.nn.Module):
 
         self.embedding_dim = embedding_dim
         self.entity_count = entity_count
-        self.relation_count = relation_count
+        if flag_add_reverse:
+            self.relation_count = int(relation_count/2)
+        else:
+            self.relation_count = relation_count
         self.unit_reg = unit_reg
         self.mult = mult
         self.psi = psi
@@ -258,18 +277,49 @@ class typed_model(torch.nn.Module):
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
         self.minimum_value = 0.0
+        
+        self.flag_add_reverse=flag_add_reverse
 
     def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
+
+        total_rel = torch.tensor(self.relation_count).cuda() 
+        inv_or_not = r >= total_rel; #inv_or_not = inv_or_not.type(torch.LongTensor)
+        r = r - inv_or_not.type(torch.cuda.LongTensor) * total_rel
+
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
         o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
-        head_type_compatibility = (s_t*r_ht).sum(-1)
-        tail_type_compatibility = (o_t*r_tt).sum(-1)
+
+
+        r_tt = r_tt.view(-1,self.embedding_dim)
+        r_ht = r_ht.view(-1,self.embedding_dim)
+
+        r_ht_new = torch.where(inv_or_not, r_tt, r_ht)
+        r_tt_new = torch.where(inv_or_not, r_ht, r_tt)
+        r_tt = r_tt_new; r_ht = r_ht_new; r_ht_new= None; r_tt_new=None
+
+        r_ht = r_ht.unsqueeze(1)
+        r_tt = r_tt.unsqueeze(1)
+
+        if s is None:
+            s_t = s_t.view(-1,self.embedding_dim)
+            r_ht = r_ht.view(-1,self.embedding_dim)
+            head_type_compatibility = r_ht @ s_t.transpose(0,1) 
+        else:
+            head_type_compatibility = (s_t*r_ht).sum(-1)
+        if o is None:
+            o_t = o_t.view(-1,self.embedding_dim)
+            r_tt = r_tt.view(-1,self.embedding_dim)
+            tail_type_compatibility = r_tt @ o_t.transpose(0,1)
+        else:
+            tail_type_compatibility = (o_t*r_tt).sum(-1)
+
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
 
     def regularizer(self, s, r, o):
@@ -310,7 +360,7 @@ class EncoderCNN(torch.nn.Module):
         return features
 
 class typed_image_model_reg(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, image_compatibility_coefficient=0, image_embedding=None):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, image_compatibility_coefficient=0, image_embedding=None,flag_add_reverse=0):
         super(typed_image_model_reg, self).__init__()
 
         base_model_class = globals()[base_model_name]
@@ -491,7 +541,7 @@ class typed_image_model_reg(torch.nn.Module):
  
 
 class typed_image_model(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, image_compatibility_coefficient=0, image_embedding=None):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, image_compatibility_coefficient=0, image_embedding=None,flag_add_reverse=0):
         super(typed_image_model, self).__init__()
 
         base_model_class = globals()[base_model_name]
@@ -1009,7 +1059,7 @@ class DME(torch.nn.Module):
     DM+E model.
     deprecated. Use Adder model with DM and E as sub models for more control
     """
-    def __init__(self, entity_count, relation_count, embedding_dim, unit_reg=False, clamp_v=None, display_norms=False):
+    def __init__(self, entity_count, relation_count, embedding_dim, unit_reg=False, clamp_v=None, display_norms=False,flag_add_reverse=0):
         super(DME, self).__init__()
         self.entity_count = entity_count
         self.embedding_dim = embedding_dim
@@ -1097,7 +1147,7 @@ class E(torch.nn.Module):
     E model \n
     scoring function (s, r, o) = s*r_h + o*r_o
     """
-    def __init__(self, entity_count, relation_count, embedding_dim, unit_reg=True, clamp_v=None, display_norms=False):
+    def __init__(self, entity_count, relation_count, embedding_dim, unit_reg=True, clamp_v=None, display_norms=False, flag_add_reverse=0):
         super(E, self).__init__()
         self.entity_count = entity_count
         self.embedding_dim = embedding_dim
@@ -1153,7 +1203,7 @@ def print_fun(data):
     print("Prachi Analysis::", data)
 
 class box_typed_model(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, mult=20.0, box_reg_coef=0.1, box_reg='l2', psi=2.0):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, mult=20.0, box_reg_coef=0.1, box_reg='l2', psi=2.0,flag_add_reverse=0):
         super(box_typed_model, self).__init__()
 
         base_model_class = globals()[base_model_name]
@@ -1274,7 +1324,7 @@ class box_typed_model(torch.nn.Module):
 
 
 class box_typed_model2(torch.nn.Module):#box model implemented differently
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, mult=20.0, box_reg_coef=0.1, box_reg='l2', psi=2.0):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, mult=20.0, box_reg_coef=0.1, box_reg='l2', psi=2.0, flag_add_reverse=0):
         super(box_typed_model2, self).__init__()
 
         base_model_class = globals()[base_model_name]
