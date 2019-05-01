@@ -251,6 +251,136 @@ class adder_model(torch.nn.Module):
     def regularizer(self, s, r, o):
         return self.model1.regularizer(s, r, o) + self.model2.regularizer(s, r, o)
 
+class typed_model_v2(torch.nn.Module):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=0):
+        '''
+        \beta (right reweighing of type and base model)  and epsilon (handle reflexivity) model
+        '''
+
+        super(typed_model_v2, self).__init__()
+
+        base_model_class = globals()[base_model_name]
+        base_model_arguments['entity_count'] = entity_count
+        base_model_arguments['relation_count'] = relation_count
+        self.base_model = base_model_class(**base_model_arguments)
+
+        self.embedding_dim = embedding_dim
+        self.entity_count = entity_count
+        if flag_add_reverse:
+            self.relation_count = int(relation_count/2)
+        else:
+            self.relation_count = relation_count
+        self.unit_reg = unit_reg
+        self.mult = mult
+        self.psi = psi
+        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
+        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
+        self.minimum_value = 0.0
+        
+        self.flag_add_reverse=flag_add_reverse
+
+        ##
+        self.flag_train_beta = flag_train_beta
+        #better combination - convex
+        self.beta = torch.nn.Embedding(self.relation_count, 1)
+        torch.nn.init.constant_(self.beta.weight.data, 3.0) 
+        #reflexive
+        self.eps = torch.nn.Embedding(self.relation_count, 1)
+        torch.nn.init.constant_(self.eps.weight.data, -3.0)
+        ##
+        
+
+    def forward(self, s, r, o, flag_debug=0):
+        base_forward = self.base_model(s, r, o)
+
+        total_rel = torch.tensor(self.relation_count).cuda() 
+        inv_or_not = r >= total_rel; #inv_or_not = inv_or_not.type(torch.LongTensor)
+        r = r - inv_or_not.type(torch.cuda.LongTensor) * total_rel
+
+        s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
+
+
+        r_tt = r_tt.view(-1,self.embedding_dim)
+        r_ht = r_ht.view(-1,self.embedding_dim)
+
+        r_ht_new = torch.where(inv_or_not, r_tt, r_ht)
+        r_tt_new = torch.where(inv_or_not, r_ht, r_tt)
+        r_tt = r_tt_new; r_ht = r_ht_new; r_ht_new= None; r_tt_new=None
+
+        r_ht = r_ht.unsqueeze(1)
+        r_tt = r_tt.unsqueeze(1)
+
+        if s is None:
+            s_t = s_t.view(-1,self.embedding_dim)
+            r_ht = r_ht.view(-1,self.embedding_dim)
+            head_type_compatibility = r_ht @ s_t.transpose(0,1) 
+        else:
+            head_type_compatibility = (s_t*r_ht).sum(-1)
+        if o is None:
+            o_t = o_t.view(-1,self.embedding_dim)
+            r_tt = r_tt.view(-1,self.embedding_dim)
+            tail_type_compatibility = r_tt @ o_t.transpose(0,1)
+        else:
+            tail_type_compatibility = (o_t*r_tt).sum(-1)
+
+        base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
+        head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
+        tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+
+        #return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
+        ##
+        epsilon = self.eps(r).squeeze(2)
+        eps = torch.nn.Sigmoid()(epsilon)
+
+        if self.flag_train_beta==0:
+            beta=1
+        else:
+            betas = self.beta(r).squeeze(2)
+            beta = torch.nn.Sigmoid()(betas)
+
+        score_old = (base_forward*beta + 1.0 - beta)*head_type_compatibility*tail_type_compatibility
+
+        if s is None:
+            base_o = score_old.gather(1, o)
+            score_new = score_old.scatter_(1, o, base_o*eps)
+            return self.mult*score_new
+        if o is None:
+            base_s = score_old.gather(1, s)
+            score_new = score_old.scatter_(1, s, base_s*eps)
+            return self.mult*score_new
+
+        #score_new = eps * ((score_old * (s==o).type(torch.cuda.FloatTensor)) + (score_old * (s != o).type(torch.cuda.FloatTensor))) + ((1 - eps) * (score_old * (s != o).type(torch.cuda.FloatTensor)) )
+        score_new = eps * (score_old * (s==o).type(torch.cuda.FloatTensor)) + (score_old * (s != o).type(torch.cuda.FloatTensor)) 
+
+        return self.mult*score_new
+        ##
+
+
+    def regularizer(self, s, r, o):
+        """
+        s_t = self.E_t(s)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o)
+        reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
+        return self.base_model.regularizer(s, r, o) + reg
+        """
+        return self.base_model.regularizer(s, r, o)
+
+    def post_epoch(self):
+        if(self.unit_reg):
+            self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
+        return self.base_model.post_epoch()
+
 
 class typed_model(torch.nn.Module):
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0):
