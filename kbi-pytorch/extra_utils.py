@@ -5,6 +5,7 @@ import numpy
 #from mpl_toolkits.mplot3d import Axes3D
 import kb
 #import matplotlib.pyplot
+import csv
 from PIL import Image
 from torchvision import transforms
 
@@ -110,6 +111,18 @@ def type_map_fine(dataset_root):
     for line in fl:
         result[line[0]] = int(line[3])
     return result
+
+def get_betas(dataset_root):
+    with open(dataset_root+"/fb15k_rel_beta2.csv") as f:
+        reader = csv.reader(f)
+        best_beta = dict(reader)
+        for k in best_beta.keys():
+            if float(best_beta[k]) == 0.0:
+                best_beta[k] = 1e-20
+            else:
+                best_beta[k] = float(best_beta[k])
+    best_beta = numpy.fromiter(best_beta.values(), dtype=float)
+    return numpy.log(best_beta/(1.0-best_beta))
 
 
 def load_image(image_path):

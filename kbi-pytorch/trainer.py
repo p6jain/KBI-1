@@ -414,6 +414,9 @@ class Trainer(object):
             if len(losses) >= batch_count[0]:
                 losses = []
                 count += 1
+
+                #beta = torch.nn.Sigmoid()(self.scoring_function.beta.weight.data)
+                #print("Prachi Debug", "beta", beta[:50], beta.sum(), beta.mean(), beta.std())
                 if count == batch_count[1]:
                     self.scoring_function.eval()
                     valid_score = evaluate.evaluate("valid", self.ranker, self.valid.kb, self.eval_batch,

@@ -181,6 +181,12 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
 
          model_arguments['image_embedding'] = 
      '''
+
+
+    if model_name == "typed_model_v2":
+        best_beta = extra_utils.get_betas(dataset_root)
+        model_arguments['best_beta'] = best_beta
+
     scoring_function = getattr(models, model_name)(**model_arguments)
     if has_cuda:
         scoring_function = scoring_function.cuda()
@@ -198,13 +204,13 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
                          regularization_coefficient=regularization_coefficient, verbose=verbose, model_name=model_name,
                          image_compatibility = scoring_function.image_compatibility, image_compatibility_coefficient = scoring_function.image_compatibility_coefficient, scheduler=scheduler)#0.01)
     elif flag_add_reverse:
-        print("Prachi Info::", "using icml reg", "regularizer")#"regularizer_icml")#regularizer_icml_orig
-        tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
+        print("Prachi Info::", "using icml reg", "regularizer_icml")#"regularizer_icml")#regularizer_icml_orig
+        tr = trainer.Trainer(scoring_function, scoring_function.regularizer_icml, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
                          regularization_coefficient=regularization_coefficient, verbose=verbose, scheduler=scheduler)
     else:
-        tr = trainer.Trainer(scoring_function, scoring_function.regularizer, loss, optim, dltrain, dlvalid, dltest,
+        tr = trainer.Trainer(scoring_function, scoring_function.regularizer_icml, loss, optim, dltrain, dlvalid, dltest,
                          batch_size=batch_size, eval_batch=eval_batch_size, negative_count=negative_sample_count,
                          save_dir=save_dir, gradient_clip=gradient_clip, hooks=hooks,
                          regularization_coefficient=regularization_coefficient, verbose=verbose, scheduler=scheduler)

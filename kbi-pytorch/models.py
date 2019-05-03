@@ -171,8 +171,7 @@ class complex(torch.nn.Module):
             #return result.sum(dim=-1)
 
 
-    def regularizer(self, s, r, o):
-        s_im = self.E_im(s) if s is not None else self.E_im.weight.unsqueeze(0)
+
         r_im = self.R_im(r)
         o_im = self.E_im(o) if o is not None else self.E_im.weight.unsqueeze(0)
         s_re = self.E_re(s) if s is not None else self.E_im.weight.unsqueeze(0)
@@ -252,7 +251,7 @@ class adder_model(torch.nn.Module):
         return self.model1.regularizer(s, r, o) + self.model2.regularizer(s, r, o)
 
 class typed_model_v2(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=0):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=0, best_beta=None):
         '''
         \beta (right reweighing of type and base model)  and epsilon (handle reflexivity) model
         '''
@@ -287,14 +286,17 @@ class typed_model_v2(torch.nn.Module):
         self.flag_train_beta = flag_train_beta
         #better combination - convex
         self.beta = torch.nn.Embedding(self.relation_count, 1)
-        torch.nn.init.constant_(self.beta.weight.data, 3.0) 
+        if best_beta is not None:
+            self.beta.weight.data.copy_(torch.from_numpy(best_beta).unsqueeze(1)) 
+        else:
+            torch.nn.init.constant_(self.beta.weight.data, 3.0) 
         #reflexive
         self.eps = torch.nn.Embedding(self.relation_count, 1)
         torch.nn.init.constant_(self.eps.weight.data, -3.0)
         ##
         
 
-    def forward(self, s, r, o, flag_debug=0):
+    def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
         base_forward = self.base_model(s, r, o)
 
         total_rel = torch.tensor(self.relation_count).cuda() 
@@ -339,11 +341,15 @@ class typed_model_v2(torch.nn.Module):
         epsilon = self.eps(r).squeeze(2)
         eps = torch.nn.Sigmoid()(epsilon)
 
-        if self.flag_train_beta==0:
-            beta=1
+
+        if beta_tmp is None:
+            if self.flag_train_beta==0:
+                beta=1
+            else:
+                betas = self.beta(r).squeeze(2)
+                beta = torch.nn.Sigmoid()(betas)
         else:
-            betas = self.beta(r).squeeze(2)
-            beta = torch.nn.Sigmoid()(betas)
+            beta = beta_tmp
 
         score_old = (base_forward*beta + 1.0 - beta)*head_type_compatibility*tail_type_compatibility
 
@@ -372,7 +378,16 @@ class typed_model_v2(torch.nn.Module):
         reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
         return self.base_model.regularizer(s, r, o) + reg
         """
-        return self.base_model.regularizer(s, r, o)
+        if self.flag_train_beta:
+            beta = torch.nn.Sigmoid()(self.beta(r))
+            #print("Prachi Debug -- reg, beta shape",self.base_model.regularizer(s,r,o).shape, beta.shape)
+            return self.base_model.regularizer(s, r, o)#+ (beta**2).sum()
+        else:
+            return self.base_model.regularizer(s, r, o)
+
+
+    def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
+        return self.base_model.regularizer_icml(s, r, o)
 
     def post_epoch(self):
         if(self.unit_reg):
@@ -462,6 +477,9 @@ class typed_model(torch.nn.Module):
         return self.base_model.regularizer(s, r, o) + reg
         """
         return self.base_model.regularizer(s, r, o)
+
+    def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
+        return self.base_model.regularizer_icml(s, r, o)
 
     def post_epoch(self):
         if(self.unit_reg):

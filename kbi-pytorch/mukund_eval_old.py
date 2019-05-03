@@ -24,9 +24,9 @@ import json
 import utils
 import extra_utils
 import pprint
-#import evaluate
+import evaluate
 #import mukund_evaluate_print as evaluate
-import beta_evaluate as evaluate
+#import exp_alpha_eval as evaluate
 #import mukund_freq_evaluate as evaluate
 import csv
 import numpy
@@ -35,75 +35,111 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.autograd import Variable
 import pickle
-import re
 
 has_cuda = torch.cuda.is_available()
 if not has_cuda:
     utils.colored_print("yellow", "CUDA is not available, using cpu")
 
 
-def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_count,loss_function, hooks,
+def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_count, hooks,
          eval_batch_size, introduce_oov, verbose, saved_model_path):
     #Load Model
     saved_model = torch.load(saved_model_path)
 
-    flag_add_reverse = 1 if re.search("_icml", model_name) else 0
-    model_name = model_name.split("_icml")[0]
-
     entity_map = saved_model['entity_map']
- 
-    #Load data
-    ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map)
-    if introduce_oov: 
-        if not "<OOV>" in ktrain.entity_map.keys():
-            ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
-        ktrain.nonoov_entity_count = ktrain.entity_map["<OOV>"]+1
-    ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
-               rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
-               add_unknowns=not introduce_oov, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)
-    kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map, 
-               rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
-               add_unknowns=not introduce_oov, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)
+    if 'reverse_entity_map' in saved_model:
+        reverse_entity_map = saved_model['reverse_entity_map']
+    else:
+        reverse_entity_map = {}
+        for k,v in entity_map.items():
+            reverse_entity_map[v] = k
+    #relation_map = saved_model['relation_map']
 
+    flag_image = 0
+
+    #Load images
+    if model_name == "image_model" or model_name == "only_image_model" or model_name == "typed_image_model" or model_name == "typed_image_model_reg":
+        flag_image = 1
+        with open(dataset_root+"/image/image_embeddings_resnet152_new_mid_iid.pkl","rb") as f:
+            im_entity_map = pickle.load(f)#mid to iid 
+        im_reverse_entity_map = {im_entity_map[ele]: ele for ele in im_entity_map}   #iid to mid
+
+        image_embedding = numpy.load(dataset_root+"/image/image_embeddings_resnet152_new.dat") ###add
+        oov_random_embedding = numpy.random.rand(1,image_embedding.shape[-1])
+        image_embedding = numpy.vstack((image_embedding,oov_random_embedding))
+        model_arguments['image_embedding'] = image_embedding
+        oov_id = len(im_entity_map)
+        im_entity_map["<OOV>"] = oov_id; im_reverse_entity_map[oov_id] = "<OOV>"
+        print("OOV ID here", oov_id)
+    
     #Load aux data
     tpm = None
-    if(verbose > 0):
+    if verbose>0:
+        utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")                                                                            
         tpm = extra_utils.type_map_fine(dataset_root) 
+
+    #Prepare data
+    if flag_image:
+        #load more data
+        mid_imid_map = saved_model['mid_imid_map']
+        additional_params = saved_model["additional_params"]
+        #"flag_use_image", "flag_facts_with_image","flag_reg_penalty_only_images","flag_reg_penalty_ent_prob","flag_reg_penalty_image_compat"
+        ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map, im_em=im_entity_map, im_rem=im_reverse_entity_map, mid_imid = mid_imid_map, additional_params=additional_params)
+        if introduce_oov and not "<OOV>" in ktrain.entity_map.keys():
+            ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
+            ktrain.mid_imid_map[ktrain.entity_map["<OOV>"]] = im_entity_map["<OOV>"]
+            ktrain.nonoov_entity_count = ktrain.entity_map["<OOV>"]+1
+        else:
+            ktrain.nonoov_entity_count = saved_model['nonoov_entity_count']
+        ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map,
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   im_em=ktrain.im_entity_map, im_rem=ktrain.im_reverse_entity_map, mid_imid = ktrain.mid_imid_map,
+                   add_unknowns=1, additional_params=additional_params, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)#{'flag_use_image':1})
+
+        kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map,
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   im_em=ktrain.im_entity_map, im_rem=ktrain.im_reverse_entity_map, mid_imid = ktrain.mid_imid_map,
+                   add_unknowns=1, additional_params=additional_params, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)#{'flag_use_image':1})
+    else:
+        ktrain = kb.kb(os.path.join(dataset_root, 'train.txt'), em=entity_map)
+        if introduce_oov and not "<OOV>" in ktrain.entity_map.keys():
+            ktrain.entity_map["<OOV>"] = len(ktrain.entity_map)
+        ktrain.nonoov_entity_count = ktrain.entity_map["<OOV>"]+1
+        print("Prachi Debug", len(ktrain.relation_map), len(ktrain.entity_map)) 
+        ktest = kb.kb(os.path.join(dataset_root, 'test.txt'), em=ktrain.entity_map, rm=ktrain.relation_map,
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   add_unknowns=not introduce_oov, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)
+        kvalid = kb.kb(os.path.join(dataset_root, 'valid.txt'), em=ktrain.entity_map, rm=ktrain.relation_map,
+                   rem=ktrain.reverse_entity_map, rrm=ktrain.reverse_relation_map,
+                   add_unknowns=not introduce_oov, nonoov_entity_count=ktrain.entity_map["<OOV>"]+1)
+
+    if(verbose > 0):
         print("train size", ktrain.facts.shape)
         print("test size", ktest.facts.shape)
         print("valid size", kvalid.facts.shape)
-        print("num entities", len(ktrain.entity_map))
-        print("num non-oov ent", ktrain.nonoov_entity_count)
-        print("num relations", len(ktrain.relation_map))
+        utils.colored_print("yellow", "VERBOSE ANALYSIS only for FB15K")
+        tpm = extra_utils.type_map_fine(dataset_root)
         enm = extra_utils.entity_name_map_fine(dataset_root)
         tnm = extra_utils.type_name_map_fine(dataset_root)
-        ktrain.augment_type_information(tpm,enm,tnm)
-        ktest.augment_type_information(tpm,enm,tnm)
-        kvalid.augment_type_information(tpm,enm,tnm)
+        ktrain.augment_type_information(tpm, enm, tnm)
+        ktest.augment_type_information(tpm, enm, tnm)
+        kvalid.augment_type_information(tpm, enm, tnm)
         hooks = extra_utils.load_hooks(hooks, ktrain)
 
-    if flag_add_reverse:#data for reg
-        ktrain.augment_prob_information()
-        kvalid.augment_prob_information(e_p=ktrain.e_prob, r_p = ktrain.r_prob)#not req for reg
-        ktest.augment_prob_information(e_p=ktrain.e_prob, r_p = ktrain.r_prob)#not req for reg
+
+    dltrain = data_loader.data_loader(ktrain, has_cuda)
+    dlvalid = data_loader.data_loader(kvalid, has_cuda)
+    dltest = data_loader.data_loader(ktest, has_cuda)
 
 
     if introduce_oov:
-        model_arguments['entity_count'] = ktrain.entity_map["<OOV>"] + 1#len(ktrain.entity_map)
+        if flag_image:
+            model_arguments['entity_count'] = ktrain.entity_map["<OOV>"] + 1
+        else:
+            model_arguments['entity_count'] = len(ktrain.entity_map)
     else:
         model_arguments['entity_count'] = len(ktrain.entity_map)
-    if flag_add_reverse:
-        model_arguments['relation_count'] = len(ktrain.relation_map)*2
-        model_arguments['flag_add_reverse'] = flag_add_reverse
-    else:
-        model_arguments['relation_count'] = len(ktrain.relation_map)
-
-    dltrain = data_loader.data_loader(ktrain, has_cuda, flag_add_reverse=flag_add_reverse, loss=loss_function, num_entity = model_arguments['entity_count'])
-    dlvalid = data_loader.data_loader(kvalid, has_cuda, flag_add_reverse=flag_add_reverse, loss=loss_function, num_entity = model_arguments['entity_count'])
-    dltest = data_loader.data_loader(ktest, has_cuda, flag_add_reverse=flag_add_reverse, loss=loss_function, num_entity = model_arguments['entity_count'])
-
-
-
+    model_arguments['relation_count'] = len(ktrain.relation_map)
 
     scoring_function = getattr(models, saved_model['model_name'])(**model_arguments)
     if has_cuda:
@@ -111,9 +147,6 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
 
     if(not eval_batch_size):
         eval_batch_size = max(50, batch_size*2*negative_sample_count//len(ktrain.entity_map))
-
-
-
 
     '''
     print(saved_model)
@@ -140,17 +173,17 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
     ranker = evaluate.ranker(scoring_function, kb.union([dltrain.kb, dlvalid.kb, dltest.kb]))
     valid_score = evaluate.evaluate("valid", ranker, dlvalid.kb, eval_batch_size,
                                     verbose=verbose, hooks=hooks, save=1)
-    #test_score = evaluate.evaluate("test ", ranker, dltest.kb, eval_batch_size,
-    #                               verbose=verbose, hooks=hooks, save=0)
+    test_score = evaluate.evaluate("test ", ranker, dltest.kb, eval_batch_size,
+                                   verbose=verbose, hooks=hooks, save=0)
     valid_score["correct_type"]["e1"] = 100.0 - (100.0* valid_score["correct_type"]["e1"] / dlvalid.kb.facts.shape[0])
-    #test_score["correct_type"]["e1"] = 100.0 - (100.0* test_score["correct_type"]["e1"] / dltest.kb.facts.shape[0])
+    test_score["correct_type"]["e1"] = 100.0 - (100.0* test_score["correct_type"]["e1"] / dltest.kb.facts.shape[0])
     valid_score["correct_type"]["e2"] = 100.0 - (100.0* valid_score["correct_type"]["e2"] / dlvalid.kb.facts.shape[0])
-    #test_score["correct_type"]["e2"] = 100.0 - (100.0* test_score["correct_type"]["e2"] / dltest.kb.facts.shape[0])
+    test_score["correct_type"]["e2"] = 100.0 - (100.0* test_score["correct_type"]["e2"] / dltest.kb.facts.shape[0])
 
     print("Valid")
     pprint.pprint(valid_score)
-    #print("Test")
-    #pprint.pprint(test_score)
+    print("Test")
+    pprint.pprint(test_score)
     """
     sub_freq = dict(Counter(dltrain.kb.facts[:,0]))
     print(sub_freq[0])
@@ -208,14 +241,16 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
     #    for k,v in rel_mrr.items():
     #        writer.writerow([k,v])
     """
+    """ 
     bbfrn, rel_mrr, mrr = evaluate.calculate_beta("valid", ranker, dlvalid.kb, eval_batch_size,verbose=verbose)
     print(bbfrn)
     print(mrr)
 
-    with open("data/fb15k/fb15k_rel_beta.csv",'w') as f:
+    with open("generated/fb15k_rel_beta.csv",'w') as f:
         writer = csv.writer(f)
         for k,v in bbfrn.items():
             writer.writerow([k,v])
+    """
     """ 
     bbfrn, rel_mrr, mrr = evaluate.calculate_sigmoid("valid", ranker, dlvalid.kb, eval_batch_size,verbose=verbose)
     print(bbfrn)
@@ -243,7 +278,6 @@ if __name__ == "__main__":
     parser.add_argument('-q', '--verbose', required=False, default=0, type=int)
     parser.add_argument('-k', '--hooks', required=False, default="[]")
     parser.add_argument('-f', '--saved_model_path', required=False)
-    parser.add_argument('-l', '--loss', help="loss function name as in losses.py", required=True)
     parser.add_argument('--data_repository_root', required=False, default='data')
     
     arguments = parser.parse_args()
@@ -254,4 +288,4 @@ if __name__ == "__main__":
     
     dataset_root = os.path.join(arguments.data_repository_root, arguments.dataset)
     
-    main(dataset_root, arguments.model, arguments.model_arguments, arguments.batch_size, arguments.negative_sample_count, arguments.loss, arguments.hooks, arguments.eval_batch_size, arguments.oov_entity, arguments.verbose, arguments.saved_model_path)
+    main(dataset_root, arguments.model, arguments.model_arguments, arguments.batch_size, arguments.negative_sample_count, arguments.hooks, arguments.eval_batch_size, arguments.oov_entity, arguments.verbose, arguments.saved_model_path)
