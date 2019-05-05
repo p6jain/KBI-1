@@ -122,7 +122,7 @@ def get_betas(dataset_root, relation_map):
                 #best_beta[k] = 1e-20
                 beta_array[int(relation_map[k])] = -1000#1e-10
             elif float(best_beta[k]) == 1.0:
-                beta_array[int(relation_map[k])] = 10#0.999999
+                beta_array[int(relation_map[k])] = 100#0.999999
             else:
                 #best_beta[k] = float(best_beta[k])
                 beta_array[int(relation_map[k])] = float(best_beta[k])
@@ -136,7 +136,7 @@ def get_betas(dataset_root, relation_map):
                 #best_beta[k] = 1e-20
                 tmp[int(relation_map[k])] = -1000#1e-10
             elif float(best_beta[k]) == 1.0:
-                tmp[int(relation_map[k])] = 10#0.999999
+                tmp[int(relation_map[k])] = 1000#0.999999
             
     print("Prachi Debug", "beta_array",beta_array[:5], beta_array[-5:] ,tmp[:5],tmp[-5:])
     return tmp;#numpy.log(beta_array/(1.0-beta_array))
