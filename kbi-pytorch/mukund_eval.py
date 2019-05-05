@@ -1,4 +1,8 @@
 '''
+time CUDA_VISIBLE_DEVICES=4 python3 mukund_eval.py -d fb15k -m typed_model_v2 -a '{"embedding_dim":19, "base_model_name":"complex", "base_model_arguments":{"embedding_dim":180}, "mult": 80.0}' -b 600 -n 1 -v 1 -q 1 -f "logs/typed_model_v2 {'embedding_dim': 19, 'base_model_name': 'complex', 'base_model_arguments': {'embedding_dim': 180}, 'mult': 80.0} crossentropy_loss run on fb15k starting from 2019-05-01 18:15:38.339405/best_valid_model.pt" -y 100 -l crossentropy_loss | tee log_beta.txt
+'''
+
+'''
 time CUDA_VISIBLE_DEVICES=1 python3 mukund_exp_get_pretrained_scores.py -d fb15k -m image_model -a '{"embedding_dim":19, "base_model_name":"complex", "base_model_arguments":{"embedding_dim":180}, "image_compatibility_coefficient":1}' -b 6500 -n 200 -v 1 -q 1 -f best_valid_model.pt 
 
 x='-d fb15k -m image_model -a -b 6500 -n 200 -v 1 -q 1 -f best_valid_model.pt';L=x.split(" ")
@@ -104,7 +108,12 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
 
 
 
-
+    #"""
+    if model_name == "typed_model_v2":
+        best_beta = extra_utils.get_betas(dataset_root, ktrain.relation_map)
+        print("Prachi Debug:", best_beta)
+        model_arguments['best_beta'] = best_beta
+    #"""
     scoring_function = getattr(models, saved_model['model_name'])(**model_arguments)
     if has_cuda:
         scoring_function = scoring_function.cuda()
@@ -174,23 +183,23 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
 
     """
     """
-    with open("generated/fb15k_rel_sigmoid.csv",'r') as f:
+    with open("data/fb15k/fb15k_rel_beta.csv",'r') as f:
         reader = csv.reader(f)
         best_alpha_for_relation = dict(reader)
 
-    train_mrr, train_e1_tc, train_e2_tc = evaluate.test_evaluate("train", ranker, ktrain, eval_batch_size, best_alpha_for_relation, verbose=verbose)
-    print(train_mrr, train_e1_tc, train_e2_tc)
+    #train_mrr, train_e1_tc, train_e2_tc = evaluate.test_evaluate("train", ranker, ktrain, eval_batch_size, best_alpha_for_relation, verbose=verbose)
+    #print(train_mrr, train_e1_tc, train_e2_tc)
 
     # evaluate.colors("valid", ranker, dlvalid.kb, eval_batch_size, best_alpha_for_relation, verbose=verbose)
     valid_mrr, valid_e1_tc, valid_e2_tc = evaluate.test_evaluate("valid", ranker, dlvalid.kb, eval_batch_size, best_alpha_for_relation, verbose=verbose)
     #valid_mrr = evaluate.mrr_change_evaluate("valid", ranker, dlvalid.kb, eval_batch_size, best_alpha_for_relation, verbose=verbose)
     print(valid_mrr, valid_e1_tc, valid_e2_tc)
 
-    test_mrr, test_e1_tc, test_e2_tc = evaluate.test_evaluate("test", ranker, dltest.kb, eval_batch_size, best_alpha_for_relation, verbose=verbose)
-    print(test_mrr, test_e1_tc, test_e2_tc)
+    #test_mrr, test_e1_tc, test_e2_tc = evaluate.test_evaluate("test", ranker, dltest.kb, eval_batch_size, best_alpha_for_relation, verbose=verbose)
+    #print(test_mrr, test_e1_tc, test_e2_tc)
 
     print("valid", valid_mrr, valid_e1_tc, valid_e2_tc)
-    print("test", test_mrr, test_e1_tc, test_e2_tc)
+    #print("test", test_mrr, test_e1_tc, test_e2_tc)
     
     """
     """
@@ -208,15 +217,17 @@ def main(dataset_root, model_name, model_arguments, batch_size, negative_sample_
     #    for k,v in rel_mrr.items():
     #        writer.writerow([k,v])
     """
+    """
     bbfrn, rel_mrr, mrr = evaluate.calculate_beta("valid", ranker, dlvalid.kb, eval_batch_size,verbose=verbose)
     print(bbfrn)
     print(mrr)
 
-    with open("data/fb15k/fb15k_rel_beta.csv",'w') as f:
+    with open("data/fb15k/fb15k_rel_beta3.csv",'w') as f:
         writer = csv.writer(f)
         for k,v in bbfrn.items():
             writer.writerow([k,v])
     """ 
+    """
     bbfrn, rel_mrr, mrr = evaluate.calculate_sigmoid("valid", ranker, dlvalid.kb, eval_batch_size,verbose=verbose)
     print(bbfrn)
     print(mrr)

@@ -112,17 +112,34 @@ def type_map_fine(dataset_root):
         result[line[0]] = int(line[3])
     return result
 
-def get_betas(dataset_root):
-    with open(dataset_root+"/fb15k_rel_beta2.csv") as f:
+def get_betas(dataset_root, relation_map):
+    with open(dataset_root+"/fb15k_rel_beta3.csv") as f:
         reader = csv.reader(f)
         best_beta = dict(reader)
+        beta_array = numpy.zeros(len(relation_map), dtype=numpy.float32)
         for k in best_beta.keys():
             if float(best_beta[k]) == 0.0:
-                best_beta[k] = 1e-20
+                #best_beta[k] = 1e-20
+                beta_array[int(relation_map[k])] = -1000#1e-10
+            elif float(best_beta[k]) == 1.0:
+                beta_array[int(relation_map[k])] = 10#0.999999
             else:
-                best_beta[k] = float(best_beta[k])
-    best_beta = numpy.fromiter(best_beta.values(), dtype=float)
-    return numpy.log(best_beta/(1.0-best_beta))
+                #best_beta[k] = float(best_beta[k])
+                beta_array[int(relation_map[k])] = float(best_beta[k])
+    #best_beta = numpy.fromiter(best_beta.values(), dtype=float)
+    #return numpy.log(best_beta/(1.0-best_beta))
+    #print("Prachi Debug", "beta_array",beta_array)
+    tmp = numpy.log(beta_array/(1.0-beta_array))
+    #print("Prachi Debug", "beta_array",beta_array[:5], beta_array[-5:] ,tmp[:5],tmp[-5:])
+    for k in best_beta.keys():
+            if float(best_beta[k]) == 0.0:
+                #best_beta[k] = 1e-20
+                tmp[int(relation_map[k])] = -1000#1e-10
+            elif float(best_beta[k]) == 1.0:
+                tmp[int(relation_map[k])] = 10#0.999999
+            
+    print("Prachi Debug", "beta_array",beta_array[:5], beta_array[-5:] ,tmp[:5],tmp[-5:])
+    return tmp;#numpy.log(beta_array/(1.0-beta_array))
 
 
 def load_image(image_path):
