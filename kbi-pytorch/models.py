@@ -166,6 +166,7 @@ class complex(torch.nn.Module):
         #print("@Prachi Debug", "result",y.sum(dim=-1)[0])
 
         return result
+        '''
         #result = (s_re*o_re+s_im*o_im)*r_re + (s_re*o_im-s_im*o_re)*r_im
         #result = o_im*(s_im*r_re+s_re*r_im) + o_re*(s_re*r_re-s_im*r_im)
             #return result.sum(dim=-1)
@@ -184,7 +185,7 @@ class complex(torch.nn.Module):
         #denom_o = r.shape[0] * self.embedding_dim * o.shape[-1]
         #return ((s_re*s_re).sum()+(s_im*s_im).sum())/(2.0*denom_s)+((o_im*o_im).sum()+(o_re*o_re).sum())/(2.0*denom_o)+(r_re*r_re).mean()/3.0+(r_im*r_im).mean()/3.0
         #return ((s_re*s_re).mean()+(s_im*s_im).mean()+(o_im*o_im).mean()+(o_re*o_re).mean())/(2.0)+((r_re*r_re).mean()+(r_im*r_im).mean())/4.0
-
+        '''
     def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
         s_im = self.E_im(s)
         r_im = self.R_im(r)
@@ -207,6 +208,15 @@ class complex(torch.nn.Module):
         #print("Prachi Debug","ele",ele.shape)
         return reg/s.shape[0]
         #(s_wt*s_re*s_re+o_wt*o_re*o_re+r_wt*r_re*r_re+s_wt*s_im*s_im+r_wt*r_im*r_im+o_wt*o_im*o_im).sum()
+
+    def regularizer(self, s, r, o):
+        s_im = self.E_im(s)
+        r_im = self.R_im(r)
+        o_im = self.E_im(o)
+        s_re = self.E_re(s)
+        r_re = self.R_re(r)
+        o_re = self.E_re(o)
+        return (s_re*s_re+o_re*o_re+r_re*r_re+s_im*s_im+r_im*r_im+o_im*o_im).sum()
 
     def regularizer_icml_orig(self, s, r, o, s_wt, r_wt, o_wt):
         s_im = self.E_im(s)
@@ -250,6 +260,74 @@ class adder_model(torch.nn.Module):
     def regularizer(self, s, r, o):
         return self.model1.regularizer(s, r, o) + self.model2.regularizer(s, r, o)
 
+class model_reflexive(torch.nn.Module):
+    def __init__(self, entity_count, relation_count, base_model_name, base_model_arguments, flag_add_reverse=0):
+        '''
+        \beta (right reweighing of type and base model)  and epsilon (handle reflexivity) model
+        '''
+
+        super(model_reflexive, self).__init__()
+
+        base_model_class = globals()[base_model_name]
+        base_model_arguments['entity_count'] = entity_count
+        base_model_arguments['relation_count'] = relation_count
+        self.base_model = base_model_class(**base_model_arguments)
+
+        self.embedding_dim = self.base_model.embedding_dim
+
+        self.entity_count = entity_count
+        if 0:#flag_add_reverse:
+            self.relation_count = int(relation_count/2)
+        else:
+            self.relation_count = relation_count
+
+        self.minimum_value = 0.0
+        
+        self.flag_add_reverse=flag_add_reverse
+
+        #reflexive
+        self.eps = torch.nn.Embedding(self.relation_count, 1)
+        torch.nn.init.constant_(self.eps.weight.data, -3.0)
+        ##
+        
+
+    def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
+        base_forward = self.base_model(s, r, o)
+
+        if 0:#flag_add_reverse:
+            total_rel = torch.tensor(self.relation_count).cuda() 
+            inv_or_not = r >= total_rel; #inv_or_not = inv_or_not.type(torch.LongTensor)
+            r = r - inv_or_not.type(torch.cuda.LongTensor) * total_rel
+
+        #base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
+        epsilon = self.eps(r).squeeze(2)
+        eps = torch.nn.Sigmoid()(epsilon)
+
+        score_old = base_forward 
+
+        if s is None:
+            base_o = score_old.gather(1, o)
+            score_new = score_old.scatter_(1, o, base_o*eps)
+            return score_new
+        if o is None:
+            base_s = score_old.gather(1, s)
+            score_new = score_old.scatter_(1, s, base_s*eps)
+            return score_new
+
+        #score_new = eps * ((score_old * (s==o).type(torch.cuda.FloatTensor)) + (score_old * (s != o).type(torch.cuda.FloatTensor))) + ((1 - eps) * (score_old * (s != o).type(torch.cuda.FloatTensor)) )
+        score_new = eps * (score_old * (s==o).type(torch.cuda.FloatTensor)) + (score_old * (s != o).type(torch.cuda.FloatTensor)) 
+
+        return score_new
+
+
+    def regularizer(self, s, r, o):
+        return self.base_model.regularizer(s, r, o)
+
+
+    def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
+        return self.base_model.regularizer_icml(s, r, o)
+
+
 class typed_model_v2(torch.nn.Module):
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=0, best_beta=None):
         '''
@@ -272,21 +350,21 @@ class typed_model_v2(torch.nn.Module):
         self.unit_reg = unit_reg
         self.mult = mult
         self.psi = psi
-        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
-        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
+        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
+        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
 
-        #'''
+        '''
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
-        #'''
-
         '''
+
+        #'''
         self.E_t.weight.data *= 1e-3
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
-        '''
+        #'''
 
         self.minimum_value = 0.0
         
@@ -414,6 +492,132 @@ class typed_model_v2(torch.nn.Module):
         #print("Prachi Debug","ele",ele.shape)
         return reg/s.shape[0] + self.base_model.regularizer_icml(s, r, o)
         #return self.base_model.regularizer_icml(s, r, o)
+
+    def post_epoch(self):
+        if(self.unit_reg):
+            self.E_t.weight.data.div_(self.E_t.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_tt.weight.data.div_(self.R_tt.weight.data.norm(2, dim=-1, keepdim=True))
+            self.R_ht.weight.data.div_(self.R_ht.weight.data.norm(2, dim=-1, keepdim=True))
+        return self.base_model.post_epoch()
+
+class typed_model_v3(torch.nn.Module):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0):
+        super(typed_model_v3, self).__init__()
+
+        base_model_class = globals()[base_model_name]
+        base_model_arguments['entity_count'] = entity_count
+        base_model_arguments['relation_count'] = relation_count
+        self.base_model = base_model_class(**base_model_arguments)
+
+        self.embedding_dim = embedding_dim
+        self.entity_count = entity_count
+        if flag_add_reverse:
+            self.relation_count = int(relation_count/2)
+        else:
+            self.relation_count = relation_count
+        self.unit_reg = unit_reg
+        self.mult = mult
+        self.psi = psi
+        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
+        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim)
+        '''
+        torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
+        torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
+        '''
+        self.E_t.weight.data *= 1e-3
+        self.R_ht.weight.data *= 1e-3
+        self.R_tt.weight.data *= 1e-3
+
+        self.minimum_value = 0.0
+        
+        self.flag_add_reverse=flag_add_reverse
+
+    def forward(self, s, r, o, flag_debug=0):
+        base_forward = self.base_model(s, r, o)
+
+        total_rel = torch.tensor(self.relation_count).cuda() 
+        inv_or_not = r >= total_rel; #inv_or_not = inv_or_not.type(torch.LongTensor)
+        r = r - inv_or_not.type(torch.cuda.LongTensor) * total_rel
+
+        s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
+
+
+        r_tt = r_tt.view(-1,self.embedding_dim)
+        r_ht = r_ht.view(-1,self.embedding_dim)
+
+        r_ht_new = torch.where(inv_or_not, r_tt, r_ht)
+        r_tt_new = torch.where(inv_or_not, r_ht, r_tt)
+        r_tt = r_tt_new; r_ht = r_ht_new; r_ht_new= None; r_tt_new=None
+
+        r_ht = r_ht.unsqueeze(1)
+        r_tt = r_tt.unsqueeze(1)
+
+        if s is None:
+            s_t = s_t.view(-1,self.embedding_dim)
+            r_ht = r_ht.view(-1,self.embedding_dim)
+            o_t = o_t.view(-1,self.embedding_dim)
+            head_type_compatibility = (o_t * r_ht) @ s_t.transpose(0,1) 
+        else:
+            s_t = s_t.view(-1,self.embedding_dim)
+            r_ht = r_ht.view(-1,self.embedding_dim)
+            o_t = o_t.view(-1,self.embedding_dim)
+            head_type_compatibility = (s_t*r_ht) @ o_t.transpose(0,1)
+            #head_type_compatibility = (s_t*r_ht).sum(-1)
+
+        if o is None:
+            o_t = o_t.view(-1,self.embedding_dim)
+            r_tt = r_tt.view(-1,self.embedding_dim)
+            s_t = s_t.view(-1,self.embedding_dim)
+            tail_type_compatibility = (s_t*r_tt) @ o_t.transpose(0,1)
+        else:
+            o_t = o_t.view(-1,self.embedding_dim)
+            r_tt = r_tt.view(-1,self.embedding_dim)
+            s_t = s_t.view(-1,self.embedding_dim)
+            tail_type_compatibility = (o_t*r_tt) @ s_t.transpose(0,1)
+            #tail_type_compatibility = (o_t*r_tt).sum(-1)
+
+        base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
+        head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
+        tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+
+        return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
+
+    def regularizer(self, s, r, o):
+        """
+        s_t = self.E_t(s)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o)
+        reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
+        return self.base_model.regularizer(s, r, o) + reg
+        """
+        return self.base_model.regularizer(s, r, o)
+
+    def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
+        #'''
+        s_t = self.E_t(s)
+        r_ht = self.R_ht(r)
+        r_tt = self.R_tt(r)
+        o_t = self.E_t(o)
+        #reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
+        #return self.base_model.regularizer(s, r, o) + reg
+        
+        factor = [torch.sqrt(s_t**2),torch.sqrt(o_t**2),torch.sqrt(r_ht**2+r_tt**2)]
+        reg = 0
+        for ele in factor:
+            reg += torch.sum(torch.abs(ele) ** 3)
+
+        #print("Prachi Debug","reg",reg.shape, reg, s.shape, reg/s.shape[0])
+        #print("Prachi Debug","ele",ele.shape)
+        return reg/s.shape[0] + self.base_model.regularizer_icml(s, r, o)
+        #'''
+        #return self.base_model.regularizer_icml(s, r, o)
+
 
     def post_epoch(self):
         if(self.unit_reg):

@@ -111,7 +111,12 @@ class Trainer(object):
         if self.regularization_coefficient is not None:
             reg = self.regularizer(s, r, o) #+ self.regularizer(None, r, o) + self.regularizer(s, r, None)
             #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no)
+            ##
+            #Issue for typed models demom.. embedding dim = type model embedding dim << base model embedding dim (embeddings mostly used for reg )
+            #Consider using a smaller (10 times) reg penalty in type model than what was used for complex
             reg = reg/(self.batch_size*self.scoring_function.embedding_dim)#*(1+2*self.negative_count))
+            
+            ##
             #reg = self.regularizer(s, r, o) + self.regularizer(ns, r, o) + self.regularizer(s, r, no) + self.regularizer(ns, r, no)
         else:
             reg = 0
