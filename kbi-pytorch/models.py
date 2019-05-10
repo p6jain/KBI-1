@@ -501,6 +501,9 @@ class typed_model_v2(torch.nn.Module):
         return self.base_model.post_epoch()
 
 class typed_model_v3(torch.nn.Module):
+    '''
+    typed scores different
+    '''
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0):
         super(typed_model_v3, self).__init__()
 
@@ -715,7 +718,7 @@ class typed_model(torch.nn.Module):
         return self.base_model.regularizer(s, r, o)
 
     def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
-        #'''
+        '''
         s_t = self.E_t(s)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
@@ -731,8 +734,8 @@ class typed_model(torch.nn.Module):
         #print("Prachi Debug","reg",reg.shape, reg, s.shape, reg/s.shape[0])
         #print("Prachi Debug","ele",ele.shape)
         return reg/s.shape[0] + self.base_model.regularizer_icml(s, r, o)
-        #'''
-        #return self.base_model.regularizer_icml(s, r, o)
+        '''
+        return self.base_model.regularizer_icml(s, r, o)
 
 
     def post_epoch(self):

@@ -381,7 +381,13 @@ class Trainer(object):
         if state['model_name'] != type(self.scoring_function).__name__:
             utils.colored_print('yellow', 'model name in saved file %s is different from the name of current model %s' %
                                 (state['model_name'], type(self.scoring_function).__name__))
-        self.scoring_function.load_state_dict(state['model_weights'])
+        try:
+            if tr.scoring_function._get_name() == state['model_name']:
+                self.scoring_function.load_state_dict(state['model_weights'])
+            elif tr.scoring_function.base_model._get_name() == state['model_name']:
+                self.scoring_function.base_model.load_state_dict(state['model_name'])   
+        except:
+            print("Wrong model file loaded!", tr.scoring_function._get_name(), state['model_name'])
         if state['optimizer_name'] != type(self.optim).__name__:
             utils.colored_print('yellow', ('optimizer name in saved file %s is different from the name of current '+
                                           'optimizer %s') %
