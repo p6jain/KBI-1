@@ -648,10 +648,10 @@ class typed_model(torch.nn.Module):
         self.unit_reg = unit_reg
         self.mult = mult
         self.psi = psi
-        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
-        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        '''
+        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
+        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
+        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
+        #'''
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
@@ -659,7 +659,7 @@ class typed_model(torch.nn.Module):
         self.E_t.weight.data *= 1e-3
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
-
+        '''  
         self.minimum_value = 0.0
         
         self.flag_add_reverse=flag_add_reverse
@@ -700,9 +700,19 @@ class typed_model(torch.nn.Module):
         else:
             tail_type_compatibility = (o_t*r_tt).sum(-1)
 
+        if flag_debug:
+            print("base_forward", base_forward[:5], torch.mean(base_forward), torch.std(base_forward))
+            print("head_type_compatibility", head_type_compatibility[:5], torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
+            print("tail_type_compatibility", tail_type_compatibility[:5], torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
+
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+
+        if flag_debug:
+            print("base_forward", base_forward[:5], torch.mean(base_forward), torch.std(base_forward))
+            print("head_type_compatibility", head_type_compatibility[:5], torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
+            print("tail_type_compatibility", tail_type_compatibility[:5], torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
 
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
 
