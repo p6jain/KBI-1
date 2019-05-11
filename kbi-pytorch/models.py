@@ -628,7 +628,7 @@ class typed_model_v3(torch.nn.Module):
 
 
 class typed_model(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, type_reg=1.0, base_reg=1.0):
         super(typed_model, self).__init__()
 
         base_model_class = globals()[base_model_name]
@@ -660,6 +660,9 @@ class typed_model(torch.nn.Module):
         self.minimum_value = 0.0
         
         self.flag_add_reverse=flag_add_reverse
+
+        self.type_reg = type_reg
+        self.base_reg = base_reg
 
     def forward(self, s, r, o, flag_debug=0):
         base_forward = self.base_model(s, r, o)
@@ -730,7 +733,7 @@ class typed_model(torch.nn.Module):
 
         #print("Prachi Debug","reg",reg.shape, reg, s.shape, reg/s.shape[0])
         #print("Prachi Debug","ele",ele.shape)
-        return reg/s.shape[0] + self.base_model.regularizer_icml(s, r, o)
+        return self.type_reg*(reg/s.shape[0]) + self.base_reg*(self.base_model.regularizer_icml(s, r, o))
         #'''
         #return self.base_model.regularizer_icml(s, r, o)
 
