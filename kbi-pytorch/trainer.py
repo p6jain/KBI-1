@@ -96,7 +96,7 @@ class Trainer(object):
         s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
-        if flag>9600:
+        if flag>9950:
             flag_debug = 1
         else:
             flag_debug = 0
@@ -381,12 +381,23 @@ class Trainer(object):
         if state['model_name'] != type(self.scoring_function).__name__:
             utils.colored_print('yellow', 'model name in saved file %s is different from the name of current model %s' %
                                 (state['model_name'], type(self.scoring_function).__name__))
-        self.scoring_function.load_state_dict(state['model_weights'])
+
+        try:
+            if self.scoring_function._get_name() == state['model_name']:
+                self.scoring_function.load_state_dict(state['model_weights'])
+            elif self.scoring_function.base_model._get_name() == state['model_name']:
+                self.scoring_function.base_model.load_state_dict(state['model_weights'])   
+        except:
+            print("Wrong model file loaded!", self.scoring_function._get_name(), state['model_name'])
+
         if state['optimizer_name'] != type(self.optim).__name__:
             utils.colored_print('yellow', ('optimizer name in saved file %s is different from the name of current '+
                                           'optimizer %s') %
                                 (state['optimizer_name'], type(self.optim).__name__))
-        self.optim.load_state_dict(state['optimizer_state'])
+
+        if self.scoring_function._get_name() == state['model_name']:
+            self.optim.load_state_dict(state['optimizer_state'])
+
         return state['mini_batches']
 
     def start(self, steps=50, batch_count=(20, 10), mb_start=0):

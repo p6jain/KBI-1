@@ -501,6 +501,9 @@ class typed_model_v2(torch.nn.Module):
         return self.base_model.post_epoch()
 
 class typed_model_v3(torch.nn.Module):
+    '''
+    typed scores different
+    '''
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0):
         super(typed_model_v3, self).__init__()
 
@@ -645,10 +648,10 @@ class typed_model(torch.nn.Module):
         self.unit_reg = unit_reg
         self.mult = mult
         self.psi = psi
-        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim)
-        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim)
-        '''
+        self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
+        self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
+        self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
+        #'''
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
@@ -656,7 +659,7 @@ class typed_model(torch.nn.Module):
         self.E_t.weight.data *= 1e-3
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
-
+        '''  
         self.minimum_value = 0.0
         
         self.flag_add_reverse=flag_add_reverse
@@ -700,9 +703,21 @@ class typed_model(torch.nn.Module):
         else:
             tail_type_compatibility = (o_t*r_tt).sum(-1)
 
+        if flag_debug:
+            print("Before Sigmoid")
+            print("base_forward", torch.mean(base_forward), torch.std(base_forward))
+            print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
+            print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
+
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+
+        if flag_debug:
+            print("After Sigmoid")
+            print("base_forward", torch.mean(base_forward), torch.std(base_forward))
+            print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
+            print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
 
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
 
@@ -716,6 +731,7 @@ class typed_model(torch.nn.Module):
         return self.base_model.regularizer(s, r, o) + reg
         """
         return self.base_model.regularizer(s, r, o)
+        #"""
 
     def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
         #'''
