@@ -96,7 +96,7 @@ class Trainer(object):
         s, r, o, ns, no = self.train.tensor_sample(self.batch_size, self.negative_count)
 
         flag = random.randint(1,10001)
-        if flag>9900:
+        if flag>9950:
             flag_debug = 1
         else:
             flag_debug = 0

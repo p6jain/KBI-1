@@ -701,18 +701,20 @@ class typed_model(torch.nn.Module):
             tail_type_compatibility = (o_t*r_tt).sum(-1)
 
         if flag_debug:
-            print("base_forward", base_forward[:5], torch.mean(base_forward), torch.std(base_forward))
-            print("head_type_compatibility", head_type_compatibility[:5], torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
-            print("tail_type_compatibility", tail_type_compatibility[:5], torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
+            print("Before Sigmoid")
+            print("base_forward", torch.mean(base_forward), torch.std(base_forward))
+            print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
+            print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
 
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward)
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
 
         if flag_debug:
-            print("base_forward", base_forward[:5], torch.mean(base_forward), torch.std(base_forward))
-            print("head_type_compatibility", head_type_compatibility[:5], torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
-            print("tail_type_compatibility", tail_type_compatibility[:5], torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
+            print("After Sigmoid")
+            print("base_forward", torch.mean(base_forward), torch.std(base_forward))
+            print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
+            print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
 
         return self.mult*base_forward*head_type_compatibility*tail_type_compatibility #, base_forward, head_type_compatibility, tail_type_compatibility
 
@@ -726,9 +728,10 @@ class typed_model(torch.nn.Module):
         return self.base_model.regularizer(s, r, o) + reg
         """
         return self.base_model.regularizer(s, r, o)
+        #"""
 
     def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
-        '''
+        #'''
         s_t = self.E_t(s)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
@@ -743,10 +746,10 @@ class typed_model(torch.nn.Module):
 
         #print("Prachi Debug","reg",reg.shape, reg, s.shape, reg/s.shape[0])
         #print("Prachi Debug","ele",ele.shape)
-        return reg/s.shape[0] + self.base_model.regularizer_icml(s, r, o)
+        return 10* (reg/s.shape[0]) + self.base_model.regularizer_icml(s, r, o)
         '''
         return self.base_model.regularizer_icml(s, r, o)
-
+        '''
 
     def post_epoch(self):
         if(self.unit_reg):
