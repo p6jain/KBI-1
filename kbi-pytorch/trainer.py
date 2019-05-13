@@ -378,17 +378,20 @@ class Trainer(object):
 
     def load_state(self, state_file):
         state = torch.load(state_file)
+        print("Loading!", state_file, state['model_name'])
         if state['model_name'] != type(self.scoring_function).__name__:
             utils.colored_print('yellow', 'model name in saved file %s is different from the name of current model %s' %
                                 (state['model_name'], type(self.scoring_function).__name__))
 
-        try:
+        if 1:#try:
             if self.scoring_function._get_name() == state['model_name']:
                 self.scoring_function.load_state_dict(state['model_weights'])
             elif self.scoring_function.base_model._get_name() == state['model_name']:
-                self.scoring_function.base_model.load_state_dict(state['model_weights'])   
-        except:
-            print("Wrong model file loaded!", self.scoring_function._get_name(), state['model_name'])
+                self.scoring_function.base_model.load_state_dict(state['model_weights'])  
+            elif self.scoring_function._get_name().split("_v1")[0] == state['model_name']:
+                self.scoring_function.load_state_dict(state['model_weights'], strict=False) 
+        #except:
+        #    print("Wrong model file loaded!", self.scoring_function._get_name(), state['model_name'])
 
         if state['optimizer_name'] != type(self.optim).__name__:
             utils.colored_print('yellow', ('optimizer name in saved file %s is different from the name of current '+

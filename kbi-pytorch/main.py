@@ -183,7 +183,7 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
      '''
 
 
-    if model_name == "typed_model_v2":
+    if 0:#model_name == "typed_model_v2":
         best_beta = extra_utils.get_betas(dataset_root, ktrain.relation_map)
         print("Prachi Debug:","best beta",best_beta)
         model_arguments['best_beta'] = best_beta
@@ -219,6 +219,8 @@ def main(dataset_root, save_dir, model_name, model_arguments, loss_function, lea
 
     if resume_from_save:
         mb_start = tr.load_state(resume_from_save)
+        #m2 = "logs/complex {'embedding_dim': 1000, 'clamp_v': 1.0} crossentropy_loss run on yago starting from 2019-05-09 12:02:02.715809/best_valid_model.pt"
+        #mb_start = tr.load_state(m2)
     else:
         mb_start = 0
     max_mini_batch_count = int(max_epochs*ktrain.facts.shape[0]/batch_size)

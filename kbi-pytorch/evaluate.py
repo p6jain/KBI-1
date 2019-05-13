@@ -182,7 +182,11 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, s
         if any fact item has id > id of oov kb.entity_map["<OOV>"]
         make it oov for s, r, o but not for image: done
         '''
- 
+
+    ##
+    score_of_expected_s_all = torch.from_numpy(numpy.array([])).type(torch.FloatTensor).cuda() 
+    score_of_expected_o_all = torch.from_numpy(numpy.array([])).type(torch.FloatTensor).cuda() 
+    ##
     for i in range(0, int(facts.shape[0]), batch_size):
         start = i
         end = min(i+batch_size, facts.shape[0])
@@ -213,7 +217,10 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, s
             else:
                 ranks_o, scores_o, score_of_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
                 ranks_s, scores_s, score_of_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
-
+        ##
+        score_of_expected_s_all = torch.cat((score_of_expected_s_all, score_of_expected_s),0)
+        score_of_expected_o_all = torch.cat((score_of_expected_o_all, score_of_expected_o),0)
+        ##
         # ranks_o, scores_o, score_of_expected_o, base_o, base_expected_o = ranker.forward(s, r, o, knowns_o, flag_s_o=1)
         # ranks_s, scores_s, score_of_expected_s, base_s, base_expected_s = ranker.forward(s, r, o, knowns_s, flag_s_o=0)
         #e1,r,?
@@ -331,12 +338,12 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, s
                 relation_object_type_correct[relation_name] = cor_o
 
 
-    with open("entity_type_correct.csv", "w") as f:
+    with open("analysis_yago/cx_entity_type_correct.csv", "w") as f:
         writer = csv.writer(f)
         #writer.writerows(abs)
         writer.writerows([subject_type_total.keys(), subject_type_total.values(), subject_type_correct.keys(), subject_type_correct.values(), object_type_total.keys(), object_type_total.values(), object_type_correct.keys(), object_type_correct.values()])
 
-    with open("relation_type_correct.csv", "w") as f:
+    with open("analysis_yago/cx_relation_type_correct.csv", "w") as f:
         writer = csv.writer(f)
         #writer.writerows(abs)
         writer.writerows([relation_subject_type_total.keys(), relation_subject_type_total.values(), relation_subject_type_correct.keys(), relation_subject_type_correct.values(), relation_object_type_total.keys(), relation_object_type_total.values(), relation_object_type_correct.keys(), relation_object_type_correct.values()])
@@ -351,5 +358,6 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, s
     totals['m'] = {x:totals['m'][x]/facts.shape[0] for x in totals['m']}
     totals['e1'] = {x:totals['e1'][x]/facts.shape[0] for x in totals['e1']}
     totals['e2'] = {x:totals['e2'][x]/facts.shape[0] for x in totals['e2']}
-
+    print("!!s", torch.mean(score_of_expected_s_all), torch.std(score_of_expected_s_all))
+    print("!!o", torch.mean(score_of_expected_o_all), torch.std(score_of_expected_o_all))
     return totals
