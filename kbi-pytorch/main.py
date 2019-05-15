@@ -261,9 +261,9 @@ if __name__ == "__main__":
             tmp.pop("additional_params")
         tmp  = str(tmp)
 
-        arguments.save_dir = os.path.join("logs", "%s %s %s run on %s starting from %s" % (arguments.model,
+        arguments.save_dir = os.path.join("logs", "%s %s run on %s starting from %s" % (arguments.model,
                                                                                         tmp,#arguments.model_arguments,
-                                                                                        arguments.loss,
+                                                                                        #arguments.loss,
                                                                                         arguments.dataset,
                                                                                         str(datetime.datetime.now())))
         '''

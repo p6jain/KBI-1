@@ -53,7 +53,8 @@ class data_loader(object):
             if self.first_zero:
                 ns[:, 0] = self.kb.nonoov_entity_count-1
                 no[:, 0] = self.kb.nonoov_entity_count-1
-        if self.kb.additional_params["flag_use_image"]:#self.kb.use_image:
+        
+        if 0:#self.kb.additional_params["flag_use_image"]:#self.kb.use_image:
             #s_image = numpy.array(self.kb.entity_id_image_matrix[s]).squeeze(1)
             #o_image = numpy.array(self.kb.entity_id_image_matrix[o]).squeeze(1)
             #return [s, r, o, ns, no, s_image, o_image]

@@ -56,7 +56,7 @@ class kb(object):
                                     flag_reg_penalty_image_compat (image compatibility is imp only for some relations, 
                                     train set used to get score corresp to every rel - score is avg dot(sub_im, obj_im)) 
         """
-        print("Not using image_compat score unless explicitly pecified from now on!")
+        #print("Not using image_compat score unless explicitly pecified from now on!")
 
         self.entity_map = {} if em is None else em
         self.relation_map = {} if rm is None else rm
@@ -82,7 +82,7 @@ class kb(object):
        
         mid_image = set([]);flag_image = 1
         dataset_root = ("/").join(filename.split("/")[:-1])
-
+        '''
         #setting flags here
         if not "flag_use_image" in self.additional_params.keys():
             self.additional_params["flag_use_image"] = 0 
@@ -97,13 +97,13 @@ class kb(object):
         if self.additional_params["flag_use_image"]:
             print("using images")
             mid_image, entity_subject_probs, entity_object_probs, relation_image_compat_score = get_image_data(dataset_root, additional_params)
-
+        '''
         with open(filename) as f:
             lines = f.readlines()
             lines = [l.split() for l in lines]
 
             for l in lines:
-                if (not(additional_params['flag_use_image'])) or (not(additional_params['flag_facts_with_image'])) or (additional_params['flag_facts_with_image'] and l[0] in mid_image and l[2] in mid_image):
+                if 1:#(not(additional_params['flag_use_image'])) or (not(additional_params['flag_facts_with_image'])) or (additional_params['flag_facts_with_image'] and l[0] in mid_image and l[2] in mid_image):
                     if(add_unknowns):
                         if(l[1] not in self.relation_map):
                             tmp = len(self.relation_map)
@@ -128,11 +128,11 @@ class kb(object):
                             self.im_entity_map[l[2]] = tmp
                             self.im_reverse_entity_map[tmp] = l[2]
                     '''
-                    if self.additional_params["flag_use_image"]:#(add_unknowns): #used only for handling neg samples -- data seen in train
+                    if 0:#self.additional_params["flag_use_image"]:#(add_unknowns): #used only for handling neg samples -- data seen in train
                         self.mid_imid_map[self.entity_map.get(l[0], len(self.entity_map)-1)] = self.im_entity_map.get(l[0], self.im_entity_map["<OOV>"])#same::#mid_image))
                         self.mid_imid_map[self.entity_map.get(l[2], len(self.entity_map)-1)] = self.im_entity_map.get(l[2], self.im_entity_map["<OOV>"])#same:#mid_image))  
                         
-                    if additional_params['flag_use_image']:
+                    if 0:#additional_params['flag_use_image']:
                         entity_reg = []; 
                         image_r_reg = 1.0
                         if (l[0] in mid_image):

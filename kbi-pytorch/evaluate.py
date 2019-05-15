@@ -166,7 +166,7 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, s
     relation_object_type_total = {}
     relation_object_type_correct = {}
 
-    if kb.additional_params["flag_use_image"]:
+    if 0:#kb.additional_params["flag_use_image"]:
         all_e = numpy.arange(len(kb.entity_map)) 
      
         all_im = kb.get_id_iid_mapping_all(all_e)
@@ -203,7 +203,7 @@ def evaluate(name, ranker, kb, batch_size, verbose=0, top_count=5, hooks=None, s
         knowns_s = torch.from_numpy(knowns_s).cuda()
         knowns_o = torch.from_numpy(knowns_o).cuda()
 
-        if kb.additional_params["flag_use_image"]:
+        if 0:#kb.additional_params["flag_use_image"]:
             s_im = facts[start:end, 3]
             o_im = facts[start:end, 4]
             s_im = torch.autograd.Variable(torch.from_numpy(s_im).cuda().unsqueeze(1), requires_grad=False)
