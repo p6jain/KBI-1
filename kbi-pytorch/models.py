@@ -865,12 +865,12 @@ class typed_model_v1_ss(torch.nn.Module):
             print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility), self.w_head.weight, self.b_head.weight)
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility), self.w_tail.weight, self.b_tail.weight)
 
-        '''
+        #'''
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward) #+ self.base_model_bias
         self.psi = 1.0
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
-        '''
+        #'''
 
         '''
         base_forward = torch.nn.ReLU()(self.psi*base_forward) #+ self.base_model_bias
@@ -878,12 +878,12 @@ class typed_model_v1_ss(torch.nn.Module):
         head_type_compatibility = torch.nn.ReLU()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.ReLU()(self.psi*tail_type_compatibility)
         '''
-
+        '''
         base_forward = torch.nn.Softplus()(self.psi*base_forward) #+ self.base_model_bias
         self.psi = 1.0
         head_type_compatibility = torch.nn.Softplus()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Softplus()(self.psi*tail_type_compatibility)
-
+        '''
 
         if beta_tmp is None:
             if self.flag_train_beta==0:
@@ -935,10 +935,19 @@ class typed_model_v1_ss(torch.nn.Module):
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
         o_t = self.E_t(o)
+
+        '''
+        s_t = self.E_t.weight
+        r_ht = self.R_ht.weight
+        r_tt = self.R_tt.weight
+        o_t = self.E_t.weight
+        '''
+
         #reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
         #return self.base_model.regularizer(s, r, o) + reg
         
-        factor = [torch.sqrt(s_t**2),torch.sqrt(o_t**2),torch.sqrt(r_ht**2+r_tt**2)]
+        #factor = [torch.sqrt(s_t**2),torch.sqrt(o_t**2),torch.sqrt(r_ht**2+r_tt**2)]
+        factor = [s_t,o_t,r_ht,r_tt]
         reg = 0
         for ele in factor:
             reg += torch.sum(torch.abs(ele) ** 3)
