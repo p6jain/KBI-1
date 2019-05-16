@@ -528,7 +528,7 @@ class typed_model_v2(torch.nn.Module):
 
 
 class typed_model_v1_DAG(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=1, best_beta=None, base_reg=1.0, type_reg=1.0, base_model_bias=0.0):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=False, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=1, best_beta=None, base_reg=1.0, type_reg=1.0, base_model_bias=0.0, alpha=1.0):#unit_reg default changes 15 may 6:27
         '''
         #to do alpha gamma here
         #\beta (right reweighing of type and base model) + normalize by dim : D + for scale shift alpha gamma 
@@ -594,6 +594,7 @@ class typed_model_v1_DAG(torch.nn.Module):
         self.b_base = torch.nn.Embedding(1, 1)
         torch.nn.init.constant_(self.b_base.weight.data, 0.0)
         torch.nn.init.constant_(self.w_base.weight.data, 0.25)
+        #'''
         self.w_head = torch.nn.Embedding(1, 1)
         self.b_head = torch.nn.Embedding(1, 1)
         torch.nn.init.constant_(self.b_head.weight.data, 0.0)
@@ -602,6 +603,8 @@ class typed_model_v1_DAG(torch.nn.Module):
         self.b_tail = torch.nn.Embedding(1, 1)
         torch.nn.init.constant_(self.b_tail.weight.data, 0.0)
         torch.nn.init.constant_(self.w_tail.weight.data, 0.25)
+        #'''
+        self.alpha = alpha
 
     def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
         base_forward = self.base_model(s, r, o)
@@ -644,7 +647,7 @@ class typed_model_v1_DAG(torch.nn.Module):
             print("base_forward", torch.mean(base_forward), torch.std(base_forward))
             print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
-        base_forward = (self.psi*base_forward - self.b_base.weight) #* self.w_base.weight  
+        base_forward = self.alpha * (self.psi*base_forward - self.b_base.weight) #* self.w_base.weight  
         #head_type_compatibility = self.w_head.weight * head_type_compatibility + self.b_head.weight
         #tail_type_compatibility = self.w_tail.weight * tail_type_compatibility + self.b_tail.weight
  
@@ -678,13 +681,15 @@ class typed_model_v1_DAG(torch.nn.Module):
             print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
 
+        '''
         self.w_base.weight.data.clamp_(-0.25, 0.25)
         self.b_base.weight.data.clamp_(-0.25, 0.25)
+        
         self.w_tail.weight.data.clamp_(-0.25, 0.25)
         self.b_tail.weight.data.clamp_(-0.25, 0.25)
         self.w_head.weight.data.clamp_(-0.25, 0.25)
         self.b_head.weight.data.clamp_(-0.25, 0.25)
-
+        '''
 
         return self.mult*score_old
 
@@ -737,7 +742,7 @@ class typed_model_v1_DAG(torch.nn.Module):
 class typed_model_v1_ss(torch.nn.Module):
     def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=0, best_beta=None, base_reg=1.0, type_reg=1.0, base_model_bias=0.0):
         '''
-        \beta (right reweighing of type and base model) + and scale shift  
+        #\beta (right reweighing of type and base model) &&  and scale shift  
         '''
 
         super(typed_model_v1_ss, self).__init__()
@@ -860,10 +865,25 @@ class typed_model_v1_ss(torch.nn.Module):
             print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility), self.w_head.weight, self.b_head.weight)
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility), self.w_tail.weight, self.b_tail.weight)
 
+        '''
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward) #+ self.base_model_bias
         self.psi = 1.0
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+        '''
+
+        '''
+        base_forward = torch.nn.ReLU()(self.psi*base_forward) #+ self.base_model_bias
+        self.psi = 1.0
+        head_type_compatibility = torch.nn.ReLU()(self.psi*head_type_compatibility)
+        tail_type_compatibility = torch.nn.ReLU()(self.psi*tail_type_compatibility)
+        '''
+
+        base_forward = torch.nn.Softplus()(self.psi*base_forward) #+ self.base_model_bias
+        self.psi = 1.0
+        head_type_compatibility = torch.nn.Softplus()(self.psi*head_type_compatibility)
+        tail_type_compatibility = torch.nn.Softplus()(self.psi*tail_type_compatibility)
+
 
         if beta_tmp is None:
             if self.flag_train_beta==0:
