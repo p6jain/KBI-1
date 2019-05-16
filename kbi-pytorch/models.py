@@ -125,6 +125,8 @@ class complex(torch.nn.Module):
             print("Complex:","Handling inverse relations as well")
         if with_sigmoid:
             print("Complex:","score with sigmoid")
+        if clamp_v:
+            print("Complex:", "Clamping embed with ", clamp_v)
 
     def forward(self, s, r, o, flag_debug=0):
         s_im = self.E_im(s) if s is not None else self.E_im.weight.unsqueeze(0)
@@ -133,7 +135,7 @@ class complex(torch.nn.Module):
         s_re = self.E_re(s) if s is not None else self.E_re.weight.unsqueeze(0)
         r_re = self.R_re(r)
         o_re = self.E_re(o) if o is not None else self.E_re.weight.unsqueeze(0)
-        '''
+        #'''
         if self.clamp_v:
             s_im.data.clamp_(-self.clamp_v, self.clamp_v)
             s_re.data.clamp_(-self.clamp_v, self.clamp_v)
@@ -141,7 +143,7 @@ class complex(torch.nn.Module):
             r_re.data.clamp_(-self.clamp_v, self.clamp_v)
             o_im.data.clamp_(-self.clamp_v, self.clamp_v)
             o_re.data.clamp_(-self.clamp_v, self.clamp_v)
-        '''
+        #'''
         if o is None:
             #x = s_im*r_re
             #y = (s_im*r_re+s_re*r_im) * o_im
@@ -935,19 +937,9 @@ class typed_model_v1_ss(torch.nn.Module):
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
         o_t = self.E_t(o)
+    
+        factor = [torch.sqrt(s_t**2),torch.sqrt(o_t**2),torch.sqrt(r_ht**2+r_tt**2)]
 
-        '''
-        s_t = self.E_t.weight
-        r_ht = self.R_ht.weight
-        r_tt = self.R_tt.weight
-        o_t = self.E_t.weight
-        '''
-
-        #reg = (s_t*s_t + r_ht*r_ht + r_tt*r_tt + o_t*o_t).sum()
-        #return self.base_model.regularizer(s, r, o) + reg
-        
-        #factor = [torch.sqrt(s_t**2),torch.sqrt(o_t**2),torch.sqrt(r_ht**2+r_tt**2)]
-        factor = [s_t,o_t,r_ht,r_tt]
         reg = 0
         for ele in factor:
             reg += torch.sum(torch.abs(ele) ** 3)
@@ -955,8 +947,10 @@ class typed_model_v1_ss(torch.nn.Module):
         #print("Prachi Debug","reg",reg.shape, reg, s.shape, reg/s.shape[0])
         #print("Prachi Debug","ele",ele.shape)
         #return reg/s.shape[0] + self.base_model.regularizer_icml(s, r, o)
+
+
         return self.type_reg*(reg/s.shape[0]) + self.base_reg*(self.base_model.regularizer_icml(s, r, o))
-        #return self.base_model.regularizer_icml(s, r, o)
+        #return self.base_reg*(self.base_model.regularizer_icml(s, r, o))
 
     def post_epoch(self):
         if(self.unit_reg):
