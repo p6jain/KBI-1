@@ -46,14 +46,39 @@ class distmult(torch.nn.Module):
         :param o: The entities corresponding to the object position. Must be a torch long tensor of 2 dimensions batch * x
         :return: The computation graph corresponding to the forward pass of the scoring function
         """
-        s = self.E(s) if s is not None else self.E.weight.unsqueeze(0)
-        r = self.R(r)
-        o = self.E(o) if o is not None else self.E.weight.unsqueeze(0)
+        s_e = self.E(s) if s is not None else self.E.weight.unsqueeze(0)
+        r_e = self.R(r)
+        o_e = self.E(o) if o is not None else self.E.weight.unsqueeze(0)
         if self.clamp_v:
-            s.data.clamp_(-self.clamp_v, self.clamp_v)
-            r.data.clamp_(-self.clamp_v, self.clamp_v)
-            o.data.clamp_(-self.clamp_v, self.clamp_v)
-        return (s*r*o).sum(dim=-1)
+            s_e.data.clamp_(-self.clamp_v, self.clamp_v)
+            r_e.data.clamp_(-self.clamp_v, self.clamp_v)
+            o_e.data.clamp_(-self.clamp_v, self.clamp_v)
+
+        if o is None:
+            tmp1 = (s_e*r_e); tmp1 = tmp1.view(-1,self.embedding_dim)
+            o_e = o_e.view(-1,self.embedding_dim).transpose(0,1)
+            result = tmp1 @ o_e
+        else:
+            tmp1 = (o_e*r_e); tmp1 = tmp1.view(-1,self.embedding_dim)
+            s_e = s_e.view(-1,self.embedding_dim).transpose(0,1)
+            result = tmp1 @ s_e
+
+        return result #(s_e*r_e*o_e).sum(dim=-1)
+
+    def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
+        s = self.E(s)
+        r = self.R(r)
+        o = self.E(o)
+
+        factor = [torch.sqrt(s**2),torch.sqrt(o**2),torch.sqrt(r**2)]
+        reg = 0
+        for ele in factor:
+            reg += torch.sum(torch.abs(ele) ** 3)
+
+        #print("Prachi Debug","reg",reg.shape, reg, s.shape, reg/s.shape[0])
+        #print("Prachi Debug","ele",ele.shape)
+        return reg/s.shape[0]
+
 
     def regularizer(self, s, r, o):
         """
@@ -106,6 +131,7 @@ class complex(torch.nn.Module):
         self.R_im = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
         self.E_re = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
         self.R_re = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
+
         '''
         torch.nn.init.normal_(self.E_re.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.E_im.weight.data, 0, 0.05)
@@ -135,6 +161,7 @@ class complex(torch.nn.Module):
         s_re = self.E_re(s) if s is not None else self.E_re.weight.unsqueeze(0)
         r_re = self.R_re(r)
         o_re = self.E_re(o) if o is not None else self.E_re.weight.unsqueeze(0)
+
         #'''
         if self.clamp_v:
             s_im.data.clamp_(-self.clamp_v, self.clamp_v)
@@ -173,14 +200,14 @@ class complex(torch.nn.Module):
             #print("Prachi Debug", "result", result.shape)
             #print("End\n\n")
         if flag_debug:
-            print("@Prachi Debug", "result",result[0])
+            #print("@Prachi Debug", "result",result[0])
             print("@Prachi Debug", "result, mean, std",torch.mean(result),torch.std(result))
 
         if self.flag_with_sigmoid:
             result = torch.nn.Sigmoid()(result)
 
             if flag_debug:
-                print("@Prachi Debug", "result",result[0])
+                #print("@Prachi Debug", "result",result[0])
                 print("@Prachi Debug", "result, mean, std",torch.mean(result),torch.std(result))
 
         return result
@@ -315,7 +342,7 @@ class model_reflexive(torch.nn.Module):
         
 
     def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
 
         if 0:#flag_add_reverse:
             total_rel = torch.tensor(self.relation_count).cuda() 
@@ -376,7 +403,7 @@ class typed_model_v2(torch.nn.Module):
         self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
         self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
 
-        #'''
+        '''
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
@@ -385,7 +412,7 @@ class typed_model_v2(torch.nn.Module):
         self.E_t.weight.data *= 1e-3
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
-        '''
+        #'''
         self.base_reg = base_reg
         self.type_reg = type_reg
         self.minimum_value = 0.0
@@ -410,7 +437,7 @@ class typed_model_v2(torch.nn.Module):
             print("Typed model v2:","Handling inverse relations as well") 
 
     def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
 
 
         if self.flag_add_reverse:
@@ -557,7 +584,7 @@ class typed_model_v1_DAG(torch.nn.Module):
         self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
         self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
 
-        #'''
+        '''
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
@@ -566,7 +593,7 @@ class typed_model_v1_DAG(torch.nn.Module):
         self.E_t.weight.data *= 1e-3
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
-        '''
+        #'''
         self.base_reg = base_reg
         self.type_reg = type_reg
         self.minimum_value = 0.0
@@ -609,7 +636,7 @@ class typed_model_v1_DAG(torch.nn.Module):
         self.alpha = alpha
 
     def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
 
         if 1:#self.flag_add_reverse:
             total_rel = torch.tensor(self.relation_count).cuda() 
@@ -742,7 +769,7 @@ class typed_model_v1_DAG(torch.nn.Module):
 
 
 class typed_model_v1_ss(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=0, best_beta=None, base_reg=1.0, type_reg=1.0, base_model_bias=0.0):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=0, best_beta=None, base_reg=1.0, type_reg=1.0, base_model_bias=0.0, clamp_v=None):
         '''
         #\beta (right reweighing of type and base model) &&  and scale shift  
         '''
@@ -767,7 +794,7 @@ class typed_model_v1_ss(torch.nn.Module):
         self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
         self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
 
-        #'''
+        '''
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
@@ -776,7 +803,7 @@ class typed_model_v1_ss(torch.nn.Module):
         self.E_t.weight.data *= 1e-3
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
-        '''
+        #'''
         self.base_reg = base_reg
         self.type_reg = type_reg
         self.minimum_value = 0.0
@@ -785,12 +812,20 @@ class typed_model_v1_ss(torch.nn.Module):
 
         ##
         self.flag_train_beta = flag_train_beta
-        if flag_train_beta:
-            print("Training beta values")
+        #if flag_train_beta:
+        #    print("Training beta values")
 
         self.base_model_bias = base_model_bias
-        if base_model_bias: 
-            print("Base model bias", base_model_bias)
+        #if base_model_bias: 
+        #    print("Base model bias", base_model_bias)
+
+        self.clamp_v = clamp_v
+
+        all_flags = [("Training beta values", flag_train_beta),("Base model bias", base_model_bias),("Clamping with", clamp_v)]
+        for ele in all_flags:
+            if ele[1]:
+                print(ele)
+        
 
         #better combination - convex
         self.beta = torch.nn.Embedding(self.relation_count, 1)
@@ -805,18 +840,18 @@ class typed_model_v1_ss(torch.nn.Module):
         self.w_base = torch.nn.Embedding(1, 1)
         self.b_base = torch.nn.Embedding(1, 1)
         torch.nn.init.constant_(self.b_base.weight.data, 0.0)
-        torch.nn.init.constant_(self.w_base.weight.data, 0.25)
+        torch.nn.init.constant_(self.w_base.weight.data, 1.0)#0.25)
         self.w_head = torch.nn.Embedding(1, 1)
         self.b_head = torch.nn.Embedding(1, 1)
         torch.nn.init.constant_(self.b_head.weight.data, 0.0)
-        torch.nn.init.constant_(self.w_head.weight.data, 0.25)
+        torch.nn.init.constant_(self.w_head.weight.data, 1.0)#0.25)
         self.w_tail = torch.nn.Embedding(1, 1)
         self.b_tail = torch.nn.Embedding(1, 1)
         torch.nn.init.constant_(self.b_tail.weight.data, 0.0)
-        torch.nn.init.constant_(self.w_tail.weight.data, 0.25)
+        torch.nn.init.constant_(self.w_tail.weight.data, 1.0)#0.25)
 
     def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
 
         if 1:#self.flag_add_reverse:
             total_rel = torch.tensor(self.relation_count).cuda() 
@@ -827,6 +862,13 @@ class typed_model_v1_ss(torch.nn.Module):
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
         o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
+
+        if self.clamp_v:
+            s_t.data.clamp_(-self.clamp_v, self.clamp_v)
+            r_ht.data.clamp_(-self.clamp_v, self.clamp_v)
+            r_tt.data.clamp_(-self.clamp_v, self.clamp_v)
+            o_t.data.clamp_(-self.clamp_v, self.clamp_v)
+
 
         r_tt = r_tt.view(-1,self.embedding_dim)
         r_ht = r_ht.view(-1,self.embedding_dim)
@@ -856,6 +898,7 @@ class typed_model_v1_ss(torch.nn.Module):
             print("base_forward", torch.mean(base_forward), torch.std(base_forward))
             print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
+        '''
         base_forward = self.w_base.weight * base_forward + self.b_base.weight
         head_type_compatibility = self.w_head.weight * head_type_compatibility + self.b_head.weight
         tail_type_compatibility = self.w_tail.weight * tail_type_compatibility + self.b_tail.weight
@@ -863,16 +906,46 @@ class typed_model_v1_ss(torch.nn.Module):
 
         if flag_debug:
             utils.colored_print("green", "Before Sigmoid: After scale shift")
-            print("base_forward", torch.mean(base_forward), torch.std(base_forward), self.w_base.weight, self.b_base.weight)
-            print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility), self.w_head.weight, self.b_head.weight)
-            print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility), self.w_tail.weight, self.b_tail.weight)
+            print("base_forward", torch.mean(base_forward), torch.std(base_forward), self.w_base.weight[0], self.b_base.weight[0])
+            print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility), self.w_head.weight[0], self.b_head.weight[0])
+            print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility), self.w_tail.weight[0], self.b_tail.weight[0])
+        '''
+        if 0:#flag_debug:
+            base_forward_clamp = base_forward.clamp(min = 0.0001)
+            head_type_compatibility_clamp = head_type_compatibility.clamp(min = 0.0001)
+            tail_type_compatibility_clamp = tail_type_compatibility.clamp(min = 0.0001)
+            if flag_debug:
+                utils.colored_print("red","After clamp")
+                print("base_forward", torch.mean(base_forward), torch.std(base_forward), torch.mean(base_forward_clamp), torch.std(base_forward_clamp))
+                print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility), torch.mean(head_type_compatibility_clamp), torch.std(head_type_compatibility_clamp))
+                print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility), torch.mean(tail_type_compatibility_clamp), torch.std(tail_type_compatibility_clamp))
+        else:
+            base_forward_clamp = 1.0
+            head_type_compatibility_clamp = 1.0
+            tail_type_compatibility_clamp = 1.0
 
-        #'''
+        base_forward = self.w_base.weight * base_forward + self.b_base.weight
+        head_type_compatibility = self.w_head.weight * head_type_compatibility + self.b_head.weight
+        tail_type_compatibility = self.w_tail.weight * tail_type_compatibility + self.b_tail.weight
+
+
+        if flag_debug:
+            utils.colored_print("green", "Before Sigmoid: After scale shift")
+            print("base_forward", torch.mean(base_forward), torch.std(base_forward), self.w_base.weight[0], self.b_base.weight[0])
+            print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility), self.w_head.weight[0], self.b_head.weight[0])
+            print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility), self.w_tail.weight[0], self.b_tail.weight[0])
+
+        base_forward = (base_forward_clamp * torch.nn.Sigmoid()(self.psi*base_forward)) #+ self.base_model_bias
+        #self.psi = 1.0
+        head_type_compatibility = head_type_compatibility_clamp * (torch.nn.Sigmoid()(self.psi*head_type_compatibility))
+        tail_type_compatibility = tail_type_compatibility_clamp * (torch.nn.Sigmoid()(self.psi*tail_type_compatibility))
+
+        '''
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward) #+ self.base_model_bias
         self.psi = 1.0
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
-        #'''
+        '''
 
         '''
         base_forward = torch.nn.ReLU()(self.psi*base_forward) #+ self.base_model_bias
@@ -904,13 +977,14 @@ class typed_model_v1_ss(torch.nn.Module):
             print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
 
-        self.w_base.weight.data.clamp_(-0.25, 0.25)
-        self.b_base.weight.data.clamp_(-0.25, 0.25)
-        self.w_tail.weight.data.clamp_(-0.25, 0.25)
-        self.b_tail.weight.data.clamp_(-0.25, 0.25)
-        self.w_head.weight.data.clamp_(-0.25, 0.25)
-        self.b_head.weight.data.clamp_(-0.25, 0.25)
-
+        #'''
+        self.w_base.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+        self.b_base.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+        self.w_tail.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+        self.b_tail.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+        self.w_head.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+        self.b_head.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+        #'''
 
         return self.mult*score_old
 
@@ -986,7 +1060,7 @@ class typed_model_v1(torch.nn.Module):
         self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
         self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
 
-        #'''
+        '''
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
@@ -995,7 +1069,7 @@ class typed_model_v1(torch.nn.Module):
         self.E_t.weight.data *= 1e-3
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
-        '''
+        #'''
         self.base_reg = base_reg
         self.type_reg = type_reg
         self.minimum_value = 0.0
@@ -1022,7 +1096,7 @@ class typed_model_v1(torch.nn.Module):
         
 
     def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
 
         if 1:#self.flag_add_reverse:
             total_rel = torch.tensor(self.relation_count).cuda() 
@@ -1169,7 +1243,7 @@ class typed_model_v3(torch.nn.Module):
         self.flag_add_reverse=flag_add_reverse
 
     def forward(self, s, r, o, flag_debug=0):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
 
         if self.flag_add_reverse:
             total_rel = torch.tensor(self.relation_count).cuda() 
@@ -1277,21 +1351,22 @@ class typed_model(torch.nn.Module):
             self.relation_count = int(relation_count/2)
         else:
             self.relation_count = relation_count
+        print("Number of rel for typed model",flag_add_reverse, self.relation_count)
         self.unit_reg = unit_reg
         self.mult = mult
         self.psi = psi
         self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
         self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
         self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
-        #'''
+        '''
         torch.nn.init.normal_(self.E_t.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_ht.weight.data, 0, 0.05)
         torch.nn.init.normal_(self.R_tt.weight.data, 0, 0.05)
-        '''
+        #'''
         self.E_t.weight.data *= 1e-3
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
-        '''  
+        #'''  
         self.minimum_value = 0.0
         
         self.flag_add_reverse=flag_add_reverse
@@ -1304,7 +1379,7 @@ class typed_model(torch.nn.Module):
             print("base_model_bias", base_model_bias)
 
     def forward(self, s, r, o, flag_debug=0):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
 
         total_rel = torch.tensor(self.relation_count).cuda() 
         inv_or_not = r >= total_rel; #inv_or_not = inv_or_not.type(torch.LongTensor)
@@ -1345,10 +1420,31 @@ class typed_model(torch.nn.Module):
             print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility))
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
 
+        '''
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward) + self.base_model_bias
         self.psi = 1.0
         head_type_compatibility = torch.nn.Sigmoid()(self.psi*head_type_compatibility)
         tail_type_compatibility = torch.nn.Sigmoid()(self.psi*tail_type_compatibility)
+        '''
+
+        if 1:#flag_debug:
+            base_forward_clamp = base_forward.clamp(min = 0.0001)
+            head_type_compatibility_clamp = head_type_compatibility.clamp(min = 0.0001)
+            tail_type_compatibility_clamp = tail_type_compatibility.clamp(min = 0.0001)
+            if flag_debug:
+                print("After clamp")
+                print("base_forward", torch.mean(base_forward), torch.std(base_forward), torch.mean(base_forward_clamp), torch.std(base_forward_clamp))
+                print("head_type_compatibility", torch.mean(head_type_compatibility), torch.std(head_type_compatibility), torch.mean(head_type_compatibility_clamp), torch.std(head_type_compatibility_clamp))
+                print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility), torch.mean(tail_type_compatibility_clamp), torch.std(tail_type_compatibility_clamp))
+        else:
+            base_forward_clamp = 1.0
+            head_type_compatibility_clamp = 1.0
+            tail_type_compatibility_clamp = 1.0
+
+        base_forward = (base_forward_clamp * torch.nn.Sigmoid()(self.psi*base_forward)) + self.base_model_bias
+        #self.psi = 1.0
+        head_type_compatibility = head_type_compatibility_clamp * (torch.nn.Sigmoid()(self.psi*head_type_compatibility))
+        tail_type_compatibility = tail_type_compatibility_clamp * (torch.nn.Sigmoid()(self.psi*tail_type_compatibility))
 
         if flag_debug:
             print("After Sigmoid")
@@ -1371,6 +1467,12 @@ class typed_model(torch.nn.Module):
         #"""
 
     def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
+
+        total_rel = torch.tensor(self.relation_count).cuda()
+
+        inv_or_not = r >= total_rel; #inv_or_not = inv_or_not.type(torch.LongTensor)
+        r = r - inv_or_not.type(torch.cuda.LongTensor) * total_rel
+        
         #'''
         s_t = self.E_t(s)
         r_ht = self.R_ht(r)
@@ -1456,7 +1558,7 @@ class typed_image_model_reg(torch.nn.Module):
         image_embedding = None
         print("IMPORTANT::TMP","added image-image compatibility!!")
     def forward(self, s, r, o, s_im, o_im, flag_debug=0):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
@@ -1653,7 +1755,7 @@ class typed_image_model(torch.nn.Module):
         '''
         print("IMPORTANT::TMP","added image-image compatibility!!")
     def forward(self, s, r, o, s_im, o_im, flag_debug=0):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
@@ -1900,7 +2002,7 @@ class only_image_model(torch.nn.Module):
         image_embedding = None
 
     def forward(self, s, r, o, flag_debug=0):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
         #s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
@@ -2017,7 +2119,7 @@ class image_model(torch.nn.Module):
         image_embedding = None
 
     def forward(self, s, r, o, s_im, o_im, flag_debug=0):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
@@ -2318,7 +2420,7 @@ class box_typed_model(torch.nn.Module):
         return distance
 
     def forward(self, s, r, o, flag_debug=0):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
 
         r_ht_low = self.R_ht_low(r)
@@ -2439,7 +2541,7 @@ class box_typed_model2(torch.nn.Module):#box model implemented differently
         return distance
 
     def forward(self, s, r, o, flag_debug=0):
-        base_forward = self.base_model(s, r, o)
+        base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
         s_t = self.E_t(s) if s is not None else self.E_t.weight.unsqueeze(0)
 
         r_ht = self.R_ht(r)
