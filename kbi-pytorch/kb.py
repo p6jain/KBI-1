@@ -100,10 +100,11 @@ class kb(object):
         '''
         with open(filename) as f:
             lines = f.readlines()
-            lines = [l.split() for l in lines]
+            lines = [l.strip("\n").split("\t") for l in lines]
 
             for l in lines:
                 if 1:#(not(additional_params['flag_use_image'])) or (not(additional_params['flag_facts_with_image'])) or (additional_params['flag_facts_with_image'] and l[0] in mid_image and l[2] in mid_image):
+                    assert len(l) == 3
                     if(add_unknowns):
                         if(l[1] not in self.relation_map):
                             tmp = len(self.relation_map)
