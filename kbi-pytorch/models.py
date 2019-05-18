@@ -853,9 +853,10 @@ class typed_model_v1_ss(torch.nn.Module):
 
 
         ###TEST
-        if flag_train_beta:
+        if 0:#flag_train_beta:
             for ele in [self.w_base, self.b_base, self.w_head, self.b_head, self.w_tail, self.b_tail]:
                 ele.weight.requires_grad=False
+            #late convergence
         ###
     def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
         base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
