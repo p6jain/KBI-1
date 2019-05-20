@@ -837,6 +837,7 @@ class typed_model_v1_ss(torch.nn.Module):
         print("Prachi Debug", "best_beta", best_beta) 
         
 
+            
         self.w_base = torch.nn.Embedding(1, 1)
         self.b_base = torch.nn.Embedding(1, 1)
         torch.nn.init.constant_(self.b_base.weight.data, 0.0)
@@ -850,6 +851,13 @@ class typed_model_v1_ss(torch.nn.Module):
         torch.nn.init.constant_(self.b_tail.weight.data, 0.0)
         torch.nn.init.constant_(self.w_tail.weight.data, 1.0)#0.25)
 
+
+        ###TEST
+        if 0:#flag_train_beta:
+            for ele in [self.w_base, self.b_base, self.w_head, self.b_head, self.w_tail, self.b_tail]:
+                ele.weight.requires_grad=False
+            #late convergence
+        ###
     def forward(self, s, r, o, flag_debug=0, beta_tmp = None):
         base_forward = self.base_model(s, r, o, flag_debug=flag_debug)
 
@@ -966,6 +974,10 @@ class typed_model_v1_ss(torch.nn.Module):
             else:
                 betas = self.beta(r).squeeze(2)
                 beta = torch.nn.Sigmoid()(betas)
+                if flag_debug:
+                    utils.colored_print("blue", "Beta")
+                    print(torch.mean(beta), torch.std(beta))
+    
         else:
             beta = beta_tmp
 
@@ -1007,6 +1019,7 @@ class typed_model_v1_ss(torch.nn.Module):
 
 
     def regularizer_icml(self, s, r, o):#, s_wt, r_wt, o_wt):
+
         s_t = self.E_t(s)
         r_ht = self.R_ht(r)
         r_tt = self.R_tt(r)
@@ -1022,8 +1035,12 @@ class typed_model_v1_ss(torch.nn.Module):
         #print("Prachi Debug","ele",ele.shape)
         #return reg/s.shape[0] + self.base_model.regularizer_icml(s, r, o)
 
-
-        return self.type_reg*(reg/s.shape[0]) + self.base_reg*(self.base_model.regularizer_icml(s, r, o))
+        if self.flag_train_beta:
+            beta = torch.nn.Sigmoid()(self.beta(r))
+            #print("Prachi Debug -- reg, beta shape",self.base_model.regularizer(s,r,o).shape, beta.shape)
+            return self.type_reg*(reg/s.shape[0]) + self.base_reg*(self.base_model.regularizer_icml(s, r, o)) + (beta**2).sum()
+        else:
+            return self.type_reg*(reg/s.shape[0]) + self.base_reg*(self.base_model.regularizer_icml(s, r, o))
         #return self.base_reg*(self.base_model.regularizer_icml(s, r, o))
 
     def post_epoch(self):
