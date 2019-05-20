@@ -769,7 +769,7 @@ class typed_model_v1_DAG(torch.nn.Module):
 
 
 class typed_model_v1_ss(torch.nn.Module):
-    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=20.0, psi=1.0, flag_add_reverse=0, flag_train_beta=0, best_beta=None, base_reg=1.0, type_reg=1.0, base_model_bias=0.0, clamp_v=None):
+    def __init__(self, entity_count, relation_count, embedding_dim, base_model_name, base_model_arguments, unit_reg=True, mult=120.0, psi=1.0, psi_t=None, psi_tail=1.0, psi_head=1.0, flag_add_reverse=0, flag_train_beta=0, best_beta=None, base_reg=1.0, type_reg=1.0, base_model_bias=0.0, clamp_v=1, verbose=True):
         '''
         #\beta (right reweighing of type and base model) &&  and scale shift  
         '''
@@ -790,6 +790,14 @@ class typed_model_v1_ss(torch.nn.Module):
         self.unit_reg = unit_reg
         self.mult = mult
         self.psi = psi
+
+        if psi_t is None:
+            self.psi_tail = psi_tail
+            self.psi_head = psi_head
+        else:
+            self.psi_tail = psi_t
+            self.psi_head = psi_t
+
         self.E_t = torch.nn.Embedding(self.entity_count, self.embedding_dim, sparse=True)
         self.R_ht = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
         self.R_tt = torch.nn.Embedding(self.relation_count, self.embedding_dim, sparse=True)
@@ -804,6 +812,12 @@ class typed_model_v1_ss(torch.nn.Module):
         self.R_ht.weight.data *= 1e-3
         self.R_tt.weight.data *= 1e-3
         #'''
+
+        if verbose:
+            print("E_t init mean, std", torch.mean(self.E_t.weight.data), torch.std(self.E_t.weight.data))
+            print("R_ht init mean, std", torch.mean(self.R_ht.weight.data), torch.std(self.R_ht.weight.data))
+            print("R_tt init mean, std", torch.mean(self.R_tt.weight.data), torch.std(self.R_tt.weight.data))
+
         self.base_reg = base_reg
         self.type_reg = type_reg
         self.minimum_value = 0.0
@@ -821,7 +835,7 @@ class typed_model_v1_ss(torch.nn.Module):
 
         self.clamp_v = clamp_v
 
-        all_flags = [("Training beta values", flag_train_beta),("Base model bias", base_model_bias),("Clamping with", clamp_v)]
+        all_flags = [("Training beta values", flag_train_beta),("Base model bias", base_model_bias),("Clamping with", clamp_v),("psi_t",psi_t),("psi",psi)]
         for ele in all_flags:
             if ele[1]:
                 print(ele)
@@ -871,7 +885,7 @@ class typed_model_v1_ss(torch.nn.Module):
         r_tt = self.R_tt(r)
         o_t = self.E_t(o) if o is not None else self.E_t.weight.unsqueeze(0)
 
-        if self.clamp_v:
+        if 0:#self.clamp_v:
             s_t.data.clamp_(-self.clamp_v, self.clamp_v)
             r_ht.data.clamp_(-self.clamp_v, self.clamp_v)
             r_tt.data.clamp_(-self.clamp_v, self.clamp_v)
@@ -944,9 +958,9 @@ class typed_model_v1_ss(torch.nn.Module):
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility), self.w_tail.weight[0], self.b_tail.weight[0])
 
         base_forward = (base_forward_clamp * torch.nn.Sigmoid()(self.psi*base_forward)) #+ self.base_model_bias
-        #self.psi = 1.0
-        head_type_compatibility = head_type_compatibility_clamp * (torch.nn.Sigmoid()(self.psi*head_type_compatibility))
-        tail_type_compatibility = tail_type_compatibility_clamp * (torch.nn.Sigmoid()(self.psi*tail_type_compatibility))
+        #self.psi_t = 1.0
+        head_type_compatibility = head_type_compatibility_clamp * (torch.nn.Sigmoid()(self.psi_head*head_type_compatibility))
+        tail_type_compatibility = tail_type_compatibility_clamp * (torch.nn.Sigmoid()(self.psi_tail*tail_type_compatibility))
 
         '''
         base_forward = torch.nn.Sigmoid()(self.psi*base_forward) #+ self.base_model_bias
@@ -990,12 +1004,51 @@ class typed_model_v1_ss(torch.nn.Module):
             print("tail_type_compatibility", torch.mean(tail_type_compatibility), torch.std(tail_type_compatibility))
 
         #'''
-        self.w_base.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
-        self.b_base.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
-        self.w_tail.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
-        self.b_tail.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
-        self.w_head.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
-        self.b_head.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+        if self.clamp_v == 1:
+            self.w_base.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_base.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_tail.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_tail.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_head.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_head.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+        elif self.clamp_v == 2:
+            #'''
+            self.w_base.weight.data.clamp_(-10.0,+10.0)#(-0.25, 0.25)
+            self.b_base.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_tail.weight.data.clamp_(-10.0,+10.0)#(-0.25, 0.25)
+            self.b_tail.weight.data.clamp_(-5.0,5.0)#(-0.25, 0.25)
+            self.w_head.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_head.weight.data.clamp_(-5.0,5.0)#(-0.25, 0.25)
+        elif self.clamp_v == 3:
+            self.w_base.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_base.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_tail.weight.data.clamp_(-1.0,+1.0)#(-0.25, 0.25)
+            self.b_tail.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_head.weight.data.clamp_(-1.0,+1.0)#(-0.25, 0.25)
+            self.b_head.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+        elif self.clamp_v == 4:
+            self.w_base.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_base.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_tail.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_tail.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_head.weight.data.clamp_(-1.0,+1.0)#(-0.25, 0.25)
+            self.b_head.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+        elif self.clamp_v == 5:
+            self.w_base.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_base.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_tail.weight.data.clamp_(-3.0,+3.0)#(-0.25, 0.25)
+            self.b_tail.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_head.weight.data.clamp_(-1.0,+1.0)#(-0.25, 0.25)
+            self.b_head.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+        elif self.clamp_v == 6:
+            self.w_base.weight.data.clamp_(-5.0,+5.0)#(-0.25, 0.25)
+            self.b_base.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_tail.weight.data.clamp_(-3.0,+3.0)#(-0.25, 0.25)
+            self.b_tail.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+            self.w_head.weight.data.clamp_(-3.0,+3.0)#(-0.25, 0.25)
+            self.b_head.weight.data.clamp_(-1.0,1.0)#(-0.25, 0.25)
+
+
         #'''
 
         return self.mult*score_old
