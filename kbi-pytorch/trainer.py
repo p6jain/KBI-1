@@ -6,6 +6,7 @@ import torch
 import kb
 import utils
 import os
+import re
 
 class Trainer(object):
     def __init__(self, scoring_function, regularizer, loss, optim, train, valid, test, verbose=0, batch_size=1000,
@@ -121,8 +122,7 @@ class Trainer(object):
         else:
             reg = 0
 
-
-        if self.loss.name == "crossentropy_loss":
+        if re.search("crossentropy_loss",self.loss.name):#self.loss.name == "crossentropy_loss":
             loss = self.loss(scores_e1, o) + self.loss(scores_e2, s) + self.regularization_coefficient*reg
         else:
             loss = self.loss(fp, scores_e2, scores_e1) + self.regularization_coefficient*reg

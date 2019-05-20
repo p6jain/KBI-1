@@ -7,6 +7,7 @@ self.kb.nonoov_entity_count is used in place of len(self.kb.entity_map)
 import numpy
 import torch
 import torch.autograd
+import re
 
 class data_loader(object):
     """
@@ -45,7 +46,7 @@ class data_loader(object):
         s = numpy.expand_dims(facts[:, 0], -1)
         r = numpy.expand_dims(facts[:, 1], -1)
         o = numpy.expand_dims(facts[:, 2], -1)
-        if self.loss == "crossentropy_loss":
+        if re.search("crossentropy_loss",self.loss):
             ns = None; no = None
         else:
             ns = numpy.random.randint(0, self.kb.nonoov_entity_count, (batch_size, negative_count))

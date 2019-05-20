@@ -12,6 +12,22 @@ class crossentropy_loss(torch.nn.Module):
         return losses
 
 
+class crossentropy_lossV2(torch.nn.Module):
+    def __init__(self):
+        super(crossentropy_lossV2, self).__init__()
+        self.name = "crossentropy_lossV2"
+        self.loss1 = nn.LogSoftmax(dim=1)
+        self.loss2 = nn.NLLLoss()
+    def forward(self, scores, ans):
+        ans = ans.view(ans.shape[0])
+        print("SCORES:BS",scores,scores.shape)
+        scores = self.loss1(scores)
+        print("SCORES: AS",scores,scores.shape)
+        losses = self.loss2(scores, ans)
+        print("LOSS",losses,losses.shape)
+        return losses
+
+
 class softmax_loss(torch.nn.Module):
     def __init__(self):
         super(softmax_loss, self).__init__()
